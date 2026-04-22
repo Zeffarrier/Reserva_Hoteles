@@ -62,20 +62,41 @@ router.beforeEach((to, from, next) => {
   const { state } = useHotelStore()
   const currentUser = state.currentUser
 
-  if (to.meta.requiresAuth && !currentUser) {
-    next('/login')
-  } else if (to.meta.requiresAuth && to.meta.roles) {
-    const roles = to.meta.roles as string[]
-    if (!roles.includes(currentUser!.role)) {
-      next('/') // Forbidden, redirect to home
-    } else {
-      next()
-    }
-  } else if ((to.name === 'login' || to.name === 'register') && currentUser) {
-    next('/') // Already logged in
-  } else {
-    next()
+  // 1. Ya está logueado pero intenta ir a login/register
+  if ((to.name === 'login' || to.name === 'register') && currentUser) {
+    if (currentUser.role === 'admin') return next('/admin')
+    if (currentUser.role === 'receptionist') return next('/receptionist')
+    return next('/')
   }
+
+  // 2. Ruta requiere autenticación pero no hay usuario
+  if (to.meta.requiresAuth && !currentUser) {
+    return next('/login')
+  }
+
+  // 3. Usuario autenticado: Restringir a sus paneles correspondientes
+  if (currentUser) {
+    // El admin no debería poder ver la vista de cliente (home, mapa, hotel-detail)
+    if (currentUser.role === 'admin' && to.name !== 'admin' && to.name !== 'profile') {
+      return next('/admin')
+    }
+    
+    // El recepcionista tampoco debería estar navegando como cliente
+    if (currentUser.role === 'receptionist' && to.name !== 'receptionist' && to.name !== 'profile') {
+      return next('/receptionist')
+    }
+
+    // Validación extra para otras vistas si se requiere
+    if (to.meta.roles) {
+      const roles = to.meta.roles as string[]
+      if (!roles.includes(currentUser.role)) {
+        return next('/') 
+      }
+    }
+  }
+
+  // 4. Todo en orden, permitir navegación
+  next()
 })
 
 export default router

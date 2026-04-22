@@ -99,8 +99,8 @@ const defaultState: State = {
       description: 'Descubre la tranquilidad y belleza de Santiago desde nuestro encantador resort. Disfruta de la naturaleza, arquitectura acogedora y las mejores piscinas de la región.',
       image: '/images/gamma_exterior.jpg',
       rating: 4.5,
-      lat: 25.4243,
-      lng: -100.1495
+      lat: 8.0964,
+      lng: -80.9686
     }
   ],
   rooms: [
@@ -267,6 +267,16 @@ const loadState = (): State => {
         ...r,
         hotelId: r.hotelId || 'h1'
       }))
+
+      // Fix any hotels that have coordinates outside Panama bounds
+      parsed.hotels = parsed.hotels.map((h: any) => {
+        if (h.lat > 9.7 || h.lat < 7.0 || h.lng > -77.1 || h.lng < -83.1) {
+          // Relocate them safely inside Panama (e.g. Santiago, Veraguas)
+          return { ...h, lat: 8.0964, lng: -80.9686 }
+        }
+        return h
+      })
+
       return parsed
     } catch (e) {
       console.error('Error parsing localStorage state')
@@ -300,6 +310,41 @@ export const useHotelStore = () => {
       const index = state.hotels.findIndex(h => h.id === id)
       if (index !== -1) {
         state.hotels[index] = { ...state.hotels[index], ...updates }
+        return true
+      }
+      return false
+    },
+
+    deleteHotel(hotelId: string) {
+      const index = state.hotels.findIndex(h => h.id === hotelId)
+      if (index !== -1) {
+        state.hotels.splice(index, 1)
+        state.rooms = state.rooms.filter(r => r.hotelId !== hotelId)
+        state.reservations = state.reservations.filter(r => r.hotelId !== hotelId)
+        return true
+      }
+      return false
+    },
+
+    addRoom(room: Omit<Room, 'id'>) {
+      const id = `${Math.floor(Math.random() * 100000)}`
+      state.rooms.push({ ...room, id })
+      return id
+    },
+
+    deleteRoom(roomId: string) {
+      const index = state.rooms.findIndex(r => r.id === roomId)
+      if (index !== -1) {
+        state.rooms.splice(index, 1)
+        return true
+      }
+      return false
+    },
+
+    updateRoom(id: string, updates: Partial<Omit<Room, 'id' | 'hotelId'>>) {
+      const index = state.rooms.findIndex(r => r.id === id)
+      if (index !== -1) {
+        state.rooms[index] = { ...state.rooms[index], ...updates }
         return true
       }
       return false

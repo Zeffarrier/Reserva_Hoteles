@@ -1,20 +1,21 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, nextTick, onUnmounted } from 'vue'
+import { ref, onMounted, watch, onUnmounted } from 'vue'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
-import type { Hotel } from '../store/hotelStore'
 
 const props = defineProps<{
-  hotels: Hotel[]
+  lat: number
+  lng: number
 }>()
 
 const emit = defineEmits<{
-  (e: 'hotel-clicked', hotel: Hotel): void
+  (e: 'update:lat', val: number): void
+  (e: 'update:lng', val: number): void
 }>()
 
 const mapContainer = ref<HTMLElement | null>(null)
 let map: L.Map | null = null
-let markersGroup: L.FeatureGroup | null = null
+let marker: L.Marker | null = null
 
 const createCustomIcon = () => {
   return L.divIcon({
@@ -32,75 +33,66 @@ const createCustomIcon = () => {
       </div>
     `,
     iconSize: [40, 48],
-    iconAnchor: [20, 48],
-    popupAnchor: [0, -48]
+    iconAnchor: [20, 48]
   })
 }
+
+const panamaBounds = L.latLngBounds(
+  L.latLng(7.0, -83.1),
+  L.latLng(9.7, -77.1)
+)
 
 const initMap = () => {
   if (!mapContainer.value) return
 
-  const defaultCenter: L.LatLngTuple = props.hotels.length > 0
-    ? [props.hotels[0].lat, props.hotels[0].lng]
-    : [8.9824, -79.5209]
-
-  // Límites geográficos de Panamá
-  const panamaBounds = L.latLngBounds(
-    L.latLng(7.0, -83.1), // Suroeste
-    L.latLng(9.7, -77.1)  // Noreste
-  )
-
   map = L.map(mapContainer.value, {
     maxBounds: panamaBounds,
     maxBoundsViscosity: 1.0,
-    minZoom: 7
-  }).setView(defaultCenter, 12)
+    minZoom: 6
+  }).setView([props.lat, props.lng], 12)
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors'
+    attribution: '&copy; OpenStreetMap'
   }).addTo(map)
 
-  markersGroup = L.featureGroup().addTo(map)
-
-  updateMarkers()
-}
-
-const updateMarkers = () => {
-  if (!map || !markersGroup) return
-  
-  markersGroup.clearLayers()
-
-  let hasValidCoords = false
   const customIcon = createCustomIcon()
+  marker = L.marker([props.lat, props.lng], { icon: customIcon, draggable: true }).addTo(map)
 
-  props.hotels.forEach(hotel => {
-    if (hotel.lat && hotel.lng) {
-      hasValidCoords = true
-      const marker = L.marker([hotel.lat, hotel.lng], { icon: customIcon })
-      
-      marker.on('click', () => {
-        emit('hotel-clicked', hotel)
-        map?.panTo([hotel.lat, hotel.lng])
-      })
-      
-      markersGroup!.addLayer(marker)
-    }
+  // Update on drag
+  marker.on('dragend', (e) => {
+    const position = e.target.getLatLng()
+    emit('update:lat', Number(position.lat.toFixed(6)))
+    emit('update:lng', Number(position.lng.toFixed(6)))
   })
 
-  if (hasValidCoords && props.hotels.length > 0) {
-    map.fitBounds(markersGroup.getBounds(), { padding: [50, 50], maxZoom: 14 })
-  }
+  // Update on click
+  map.on('click', (e: L.LeafletMouseEvent) => {
+    const position = e.latlng
+    marker?.setLatLng(position)
+    emit('update:lat', Number(position.lat.toFixed(6)))
+    emit('update:lng', Number(position.lng.toFixed(6)))
+  })
 }
 
 onMounted(() => {
   setTimeout(() => {
     initMap()
-  }, 100)
+    // Forzar recalcular tamaño del mapa después de que se termine la animación del panel
+    setTimeout(() => {
+      if (map) map.invalidateSize()
+    }, 400)
+  }, 200)
 })
 
-watch(() => props.hotels, () => {
-  nextTick(() => updateMarkers())
-}, { deep: true })
+watch(() => [props.lat, props.lng], ([newLat, newLng]) => {
+  if (marker && newLat && newLng) {
+    const currentLatLng = marker.getLatLng()
+    if (Math.abs(currentLatLng.lat - newLat) > 0.000001 || Math.abs(currentLatLng.lng - newLng) > 0.000001) {
+      marker.setLatLng([newLat, newLng])
+      map?.panTo([newLat, newLng])
+    }
+  }
+})
 
 onUnmounted(() => {
   if (map) {
@@ -116,10 +108,10 @@ onUnmounted(() => {
 <style scoped>
 .map-wrapper {
   width: 100%;
-  height: 100%;
-  border-radius: inherit;
-  min-height: 400px;
-  z-index: 1; /* prevent overlapping floating elements */
+  height: 250px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(0,0,0,0.1);
+  z-index: 1;
 }
 
 /* Custom Leaflet Marker Styles */
@@ -143,6 +135,11 @@ onUnmounted(() => {
   left: 2px;
   border: 2px solid white;
   z-index: 2;
+  cursor: grab;
+}
+
+:deep(.marker-pin:active) {
+  cursor: grabbing;
 }
 
 :deep(.marker-pin svg) {

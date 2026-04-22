@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { useHotelStore } from '../store/hotelStore'
 
 const router = useRouter()
-const { login } = useHotelStore()
+const { login, state } = useHotelStore()
 
 const email = ref('')
 const password = ref('')
@@ -13,7 +13,11 @@ const errorMsg = ref('')
 const handleLogin = () => {
   errorMsg.value = ''
   if (login(email.value, password.value)) {
-    router.push('/')
+    if (state.currentUser?.role === 'admin') {
+      router.push('/admin')
+    } else {
+      router.push('/')
+    }
   } else {
     errorMsg.value = 'Credenciales incorrectas. Inténtalo de nuevo.'
   }

@@ -20,11 +20,18 @@ const handleLogout = () => {
     <nav class="main-nav">
       <div class="nav-brand">LuxeStay</div>
       <div class="nav-links">
-        <RouterLink to="/" class="nav-link">Home</RouterLink>
-        
-        <!-- Only for Receptionist or Admin -->
+        <!-- Not for Admin -->
         <RouterLink 
-          v-if="currentUser && (currentUser.role === 'receptionist' || currentUser.role === 'admin')" 
+          v-if="!currentUser || currentUser.role !== 'admin'"
+          to="/" 
+          class="nav-link"
+        >
+          Home
+        </RouterLink>
+        
+        <!-- Only for Receptionist -->
+        <RouterLink 
+          v-if="currentUser && currentUser.role === 'receptionist'" 
           to="/receptionist" 
           class="nav-link"
         >
