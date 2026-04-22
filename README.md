@@ -1,3 +1,8 @@
+En caso de testear como admin:
+
+admin@hotel.com
+123
+
 # Reserva Hoteles
 
 A small hotel reservation single-page application built with Vue 3, TypeScript and Vite.
