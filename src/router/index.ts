@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
 import HotelDetailView from '../views/HotelDetailView.vue'
+import MapView from '../views/MapView.vue'
 import ReceptionistView from '../views/ReceptionistView.vue'
 import AdminView from '../views/AdminView.vue'
 import LoginView from '../views/LoginView.vue'
@@ -20,6 +21,11 @@ const router = createRouter({
       path: '/hotel/:id',
       name: 'hotel-detail',
       component: HotelDetailView
+    },
+    {
+      path: '/mapa',
+      name: 'map',
+      component: MapView
     },
     {
       path: '/login',

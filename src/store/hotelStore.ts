@@ -17,6 +17,8 @@ export interface Hotel {
   description: string
   image: string
   rating: number
+  lat: number
+  lng: number
 }
 
 export interface RoomExtendedDetails {
@@ -76,7 +78,9 @@ const defaultState: State = {
       city: 'Panamá',
       description: 'Experimenta la elegancia y el diseño moderno en el corazón del distrito financiero. Cuenta con una espectacular piscina en la azotea, gimnasio de última generación y vistas inigualables.',
       image: '/images/media__1776790094302.png',
-      rating: 4.8
+      rating: 4.8,
+      lat: 8.9824,
+      lng: -79.5209
     },
     {
       id: 'h2',
@@ -84,7 +88,9 @@ const defaultState: State = {
       city: 'Panamá',
       description: 'Disfruta de un servicio de primera clase y una ubicación privilegiada en el corazón de la ciudad. Instalaciones modernas, restaurantes de clase mundial y vistas increíbles.',
       image: '/images/riu_exterior.png',
-      rating: 4.6
+      rating: 4.6,
+      lat: 8.9833,
+      lng: -79.5167
     },
     {
       id: 'h3',
@@ -92,7 +98,9 @@ const defaultState: State = {
       city: 'Santiago',
       description: 'Descubre la tranquilidad y belleza de Santiago desde nuestro encantador resort. Disfruta de la naturaleza, arquitectura acogedora y las mejores piscinas de la región.',
       image: '/images/gamma_exterior.jpg',
-      rating: 4.5
+      rating: 4.5,
+      lat: 25.4243,
+      lng: -100.1495
     }
   ],
   rooms: [
@@ -110,9 +118,9 @@ const defaultState: State = {
         spaceInfo: '1 habitación, 2 personas • 350 pies cuadrados',
         roomBreakdown: [{ name: 'Habitación 1', beds: '1 cama King' }],
         highlightAmenities: [
-          { icon: '🛏️', text: 'Ropa de cama premium' },
-          { icon: '❄️', text: 'Aire acondicionado' },
-          { icon: '📺', text: 'TV de pantalla plana' }
+          { icon: 'bed', text: 'Ropa de cama premium' },
+          { icon: 'snowflake', text: 'Aire acondicionado' },
+          { icon: 'tv', text: 'TV de pantalla plana' }
         ],
         categorizedAmenities: {
           'Baño': ['Baño privado', 'Amenidades de baño gratuitas', 'Regadera', 'Secadora de cabello', 'Toallas'],
@@ -136,9 +144,9 @@ const defaultState: State = {
         spaceInfo: '1 habitación, 4 personas • 450 pies cuadrados',
         roomBreakdown: [{ name: 'Habitación 1', beds: '2 camas matrimoniales' }],
         highlightAmenities: [
-          { icon: '🛏️', text: 'Ropa de cama premium' },
-          { icon: '❄️', text: 'Aire acondicionado' },
-          { icon: '☕', text: 'Cafetera/tetera' }
+          { icon: 'bed', text: 'Ropa de cama premium' },
+          { icon: 'snowflake', text: 'Aire acondicionado' },
+          { icon: 'coffee', text: 'Cafetera/tetera' }
         ],
         categorizedAmenities: {
           'Baño': ['Baño privado', 'Amenidades de baño gratuitas', 'Regadera', 'Secadora de cabello', 'Toallas'],
@@ -168,11 +176,11 @@ const defaultState: State = {
           { name: 'Sala de estar', beds: '1 sofá cama individual' }
         ],
         highlightAmenities: [
-          { icon: '🛋️', text: 'Área de descanso separada' },
-          { icon: '🍽️', text: 'Área de comedor independiente' },
-          { icon: '🎧', text: 'Habitaciones insonorizadas' },
-          { icon: '✨', text: 'Decoración personalizada' },
-          { icon: '❄️', text: 'Aire acondicionado' }
+          { icon: 'sofa', text: 'Área de descanso separada' },
+          { icon: 'utensils', text: 'Área de comedor independiente' },
+          { icon: 'headphones', text: 'Habitaciones insonorizadas' },
+          { icon: 'sparkle', text: 'Decoración personalizada' },
+          { icon: 'snowflake', text: 'Aire acondicionado' }
         ],
         categorizedAmenities: {
           'Acceso para personas con discapacidad': ['Acceso para silla de ruedas', 'Piso de baldosas', 'Piso de madera sólida'],
@@ -200,10 +208,10 @@ const defaultState: State = {
         spaceInfo: '1 habitación, 2 personas • 400 pies cuadrados',
         roomBreakdown: [{ name: 'Habitación Principal', beds: '1 cama King' }],
         highlightAmenities: [
-          { icon: '🛏️', text: 'Ropa de cama premium' },
-          { icon: '❄️', text: 'Aire acondicionado central' },
-          { icon: '📺', text: 'TV de pantalla plana' },
-          { icon: '💼', text: 'Espacio para trabajar con laptop' }
+          { icon: 'bed', text: 'Ropa de cama premium' },
+          { icon: 'snowflake', text: 'Aire acondicionado central' },
+          { icon: 'tv', text: 'TV de pantalla plana' },
+          { icon: 'briefcase', text: 'Espacio para trabajar con laptop' }
         ],
         categorizedAmenities: {
           'Baño': ['Baño privado de lujo', 'Amenidades de baño gratuitas', 'Regadera', 'Secadora de cabello', 'Espejo de vanidad'],
@@ -228,10 +236,10 @@ const defaultState: State = {
         spaceInfo: '1 habitación, 4 personas • 380 pies cuadrados',
         roomBreakdown: [{ name: 'Habitación Principal', beds: '2 camas matrimoniales' }],
         highlightAmenities: [
-          { icon: '🛏️', text: 'Ropa de cama de alta calidad' },
-          { icon: '🏔️', text: 'Excelente vista' },
-          { icon: '📺', text: 'TV de pantalla plana' },
-          { icon: '❄️', text: 'Aire acondicionado' }
+          { icon: 'bed', text: 'Ropa de cama de alta calidad' },
+          { icon: 'mountain', text: 'Excelente vista' },
+          { icon: 'tv', text: 'TV de pantalla plana' },
+          { icon: 'snowflake', text: 'Aire acondicionado' }
         ],
         categorizedAmenities: {
           'Baño': ['Baño privado', 'Amenidades de baño gratuitas', 'Espejo de aumento luminoso', 'Regadera'],
@@ -273,10 +281,13 @@ watch(() => state, (newState) => {
   localStorage.setItem('hotel_store_state_v10', JSON.stringify(newState))
 }, { deep: true })
 
+// Session-only search dates (not persisted)
+const searchDates = reactive<{ start: Date | null, end: Date | null }>({ start: null, end: null })
 
 export const useHotelStore = () => {
   return {
     state,
+    searchDates,
 
     // Hotel Actions
     addHotel(hotel: Omit<Hotel, 'id'>) {

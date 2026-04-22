@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import type { Room } from '../store/hotelStore'
+import SvgIcon from './SvgIcon.vue'
 
 const props = defineProps<{
   room: Room
@@ -31,17 +32,26 @@ const prevImage = () => {
   currentImageIndex.value = (currentImageIndex.value - 1 + props.room.images.length) % props.room.images.length
 }
 
-const discountedPrice = computed(() => Math.floor(props.room.pricePerNight * 0.85)) // Fake discount logic for UI
+const discountedPrice = computed(() => Math.floor(props.room.pricePerNight * 0.85))
+
+const isClosing = ref(false)
+
+const handleClose = () => {
+  isClosing.value = true
+  setTimeout(() => {
+    emit('close')
+  }, 250)
+} // Fake discount logic for UI
 </script>
 
 <template>
-  <div class="modal-overlay" @click.self="emit('close')">
-    <div class="modal-container">
+  <div class="modal-overlay" :class="{ closing: isClosing }" @click.self="handleClose">
+    <div class="modal-container" :class="{ closing: isClosing }">
       
       <!-- Header -->
       <div class="modal-header">
-        <button class="close-btn" @click="emit('close')">
-          <span class="close-icon">✕</span>
+        <button class="close-btn" @click="handleClose">
+          <SvgIcon name="close" :size="16" />
         </button>
         <h2>Información de la unidad</h2>
       </div>
@@ -53,8 +63,8 @@ const discountedPrice = computed(() => Math.floor(props.room.pricePerNight * 0.8
         <div class="image-carousel">
           <img :src="currentImage" :alt="room.name" class="main-image" />
           <div v-if="hasMultipleImages" class="carousel-controls">
-            <button @click.stop="prevImage" class="carousel-btn prev-btn">❮</button>
-            <button @click.stop="nextImage" class="carousel-btn next-btn">❯</button>
+            <button @click.stop="prevImage" class="carousel-btn prev-btn"><SvgIcon name="chevron-left" :size="20" /></button>
+            <button @click.stop="nextImage" class="carousel-btn next-btn"><SvgIcon name="chevron-right" :size="20" /></button>
           </div>
         </div>
 
@@ -64,7 +74,7 @@ const discountedPrice = computed(() => Math.floor(props.room.pricePerNight * 0.8
           <!-- Highlight Amenities -->
           <div v-if="room.extendedDetails?.highlightAmenities" class="highlights-grid">
             <div v-for="(highlight, idx) in room.extendedDetails.highlightAmenities" :key="idx" class="highlight-item">
-              <span class="highlight-icon">{{ highlight.icon }}</span>
+              <span class="highlight-icon"><SvgIcon :name="highlight.icon" :size="28" /></span>
               <span class="highlight-text">{{ highlight.text }}</span>
             </div>
           </div>
@@ -77,7 +87,7 @@ const discountedPrice = computed(() => Math.floor(props.room.pricePerNight * 0.8
             <div v-if="room.extendedDetails?.roomBreakdown" class="room-breakdown">
               <div v-for="(breakdown, idx) in room.extendedDetails.roomBreakdown" :key="idx" class="breakdown-item">
                 <h4 class="breakdown-name">{{ breakdown.name }}</h4>
-                <div class="bed-icon">🛏️</div>
+                <div class="bed-icon"><SvgIcon name="bed" :size="24" /></div>
                 <p class="breakdown-beds">{{ breakdown.beds }}</p>
               </div>
             </div>
@@ -131,12 +141,29 @@ const discountedPrice = computed(() => Math.floor(props.room.pricePerNight * 0.8
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.6);
+  background-color: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 1000;
   padding: 24px;
+  animation: overlayFadeIn 0.3s ease-out;
+}
+
+.modal-overlay.closing {
+  animation: overlayFadeOut 0.25s ease-in forwards;
+}
+
+@keyframes overlayFadeIn {
+  from { backdrop-filter: blur(0px); background-color: rgba(0, 0, 0, 0); }
+  to { backdrop-filter: blur(12px); background-color: rgba(0, 0, 0, 0.4); }
+}
+
+@keyframes overlayFadeOut {
+  from { backdrop-filter: blur(12px); background-color: rgba(0, 0, 0, 0.4); }
+  to { backdrop-filter: blur(0px); background-color: rgba(0, 0, 0, 0); }
 }
 
 .modal-container {
@@ -152,9 +179,18 @@ const discountedPrice = computed(() => Math.floor(props.room.pricePerNight * 0.8
   animation: slideUp 0.3s ease-out;
 }
 
+.modal-container.closing {
+  animation: slideDown 0.25s ease-in forwards;
+}
+
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(40px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideDown {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(40px); }
 }
 
 .modal-header {
@@ -191,6 +227,32 @@ const discountedPrice = computed(() => Math.floor(props.room.pricePerNight * 0.8
 .modal-content {
   flex: 1;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+}
+
+.modal-content::-webkit-scrollbar {
+  width: 6px;
+  background: transparent;
+}
+
+.modal-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 999px;
+}
+
+.modal-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.modal-content::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .image-carousel {

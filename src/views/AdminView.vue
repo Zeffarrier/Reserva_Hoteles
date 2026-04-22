@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import { useHotelStore, type Hotel } from '../store/hotelStore'
 import ReservationList from '../components/ReservationList.vue'
+import SvgIcon from '../components/SvgIcon.vue'
 
 const { state, addHotel, updateHotel } = useHotelStore()
 
@@ -31,13 +32,15 @@ const hotelForm = ref({
   city: '',
   description: '',
   image: '',
-  rating: 5
+  rating: 5,
+  lat: 8.9824,
+  lng: -79.5209
 })
 
 const openNewHotelForm = () => {
   isEditing.value = false
   editingHotelId.value = null
-  hotelForm.value = { name: '', city: '', description: '', image: '', rating: 5 }
+  hotelForm.value = { name: '', city: '', description: '', image: '', rating: 5, lat: 8.9824, lng: -79.5209 }
   showHotelForm.value = true
 }
 
@@ -76,20 +79,20 @@ const saveHotel = () => {
       <div v-if="currentTab === 'dashboard'" class="animate-fade-in">
         <div class="dashboard-grid">
            <div class="dashboard-card">
-             <div class="card-icon">🏨</div>
+             <div class="card-icon"><SvgIcon name="hotel" :size="40" /></div>
              <h3>Ocupación Global</h3>
              <p class="stat">{{ occupancyRate }}%</p>
              <p class="sub-stat">{{ occupiedRooms }} de {{ totalRooms }} habitaciones</p>
            </div>
            
            <div class="dashboard-card">
-             <div class="card-icon">💰</div>
+             <div class="card-icon"><SvgIcon name="money" :size="40" /></div>
              <h3>Ingresos Estimados</h3>
              <p class="stat">${{ totalRevenue.toLocaleString() }}</p>
            </div>
            
            <div class="dashboard-card">
-             <div class="card-icon">🏢</div>
+             <div class="card-icon"><SvgIcon name="building" :size="40" /></div>
              <h3>Hoteles Activos</h3>
              <p class="stat">{{ state.hotels.length }}</p>
            </div>
@@ -126,6 +129,14 @@ const saveHotel = () => {
               <label class="input-label">Calificación (Estrellas)</label>
               <input v-model="hotelForm.rating" type="number" step="0.5" min="1" max="5" class="input-field" required />
             </div>
+            <div class="input-group">
+              <label class="input-label">Latitud</label>
+              <input v-model="hotelForm.lat" type="number" step="0.0001" class="input-field" required />
+            </div>
+            <div class="input-group">
+              <label class="input-label">Longitud</label>
+              <input v-model="hotelForm.lng" type="number" step="0.0001" class="input-field" required />
+            </div>
             <div class="form-actions">
               <button type="button" class="btn btn-secondary" @click="showHotelForm = false">Cancelar</button>
               <button type="submit" class="btn btn-primary">Guardar</button>
@@ -147,7 +158,7 @@ const saveHotel = () => {
               <tr v-for="hotel in state.hotels" :key="hotel.id">
                 <td><strong>{{ hotel.name }}</strong></td>
                 <td>{{ hotel.city }}</td>
-                <td>{{ hotel.rating }} ★</td>
+                <td>{{ hotel.rating }} <SvgIcon name="star" :size="14" /></td>
                 <td>
                   <button class="btn btn-secondary btn-sm" @click="openEditHotelForm(hotel)">Editar</button>
                 </td>

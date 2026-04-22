@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Hotel } from '../store/hotelStore'
 import { useRouter } from 'vue-router'
+import SvgIcon from './SvgIcon.vue'
 
 const props = defineProps<{
   hotel: Hotel
@@ -24,7 +25,7 @@ const viewDetails = () => {
       <h3>{{ hotel.name }}</h3>
       
       <div class="rating">
-        <span class="star">★</span>
+        <span class="star"><SvgIcon name="star" :size="16" /></span>
         <span>{{ hotel.rating }} / 5</span>
       </div>
       

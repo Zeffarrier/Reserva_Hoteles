@@ -233,6 +233,7 @@ const getDayClasses = (day: any) => {
   box-shadow: 0 4px 20px rgba(0,0,0,0.15);
   padding: 0;
   width: 700px;
+  max-width: 100%;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   color: #333;
   overflow: hidden;
@@ -242,12 +243,14 @@ const getDayClasses = (day: any) => {
 
 .calendars-wrapper {
   display: flex;
+  flex-wrap: wrap;
   padding: 24px;
   gap: 24px;
 }
 
 .calendar-pane {
   flex: 1;
+  min-width: 200px;
 }
 
 .calendar-header {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { RouterLink, RouterView, useRouter } from 'vue-router'
 import { useHotelStore } from './store/hotelStore'
+import SvgIcon from './components/SvgIcon.vue'
 import { computed } from 'vue'
 
 const { state, logout } = useHotelStore()
@@ -43,7 +44,7 @@ const handleLogout = () => {
       <div class="auth-links">
         <template v-if="currentUser">
           <RouterLink to="/profile" class="nav-link user-profile-link">
-            👤 {{ currentUser.name }}
+            <SvgIcon name="user" :size="16" /> {{ currentUser.name }}
           </RouterLink>
           <button @click="handleLogout" class="btn-logout">Salir</button>
         </template>
@@ -54,7 +55,11 @@ const handleLogout = () => {
       </div>
     </nav>
     <main class="main-content">
-      <RouterView />
+      <router-view v-slot="{ Component }">
+        <transition name="page-fade" mode="out-in">
+          <component :is="Component" />
+        </transition>
+      </router-view>
     </main>
   </div>
 </template>
@@ -145,5 +150,21 @@ const handleLogout = () => {
 .main-content {
   flex: 1;
   background: var(--color-background);
+}
+
+/* Page Transitions */
+.page-fade-enter-active,
+.page-fade-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.page-fade-enter-from {
+  opacity: 0;
+  transform: translateY(15px);
+}
+
+.page-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-15px);
 }
 </style>

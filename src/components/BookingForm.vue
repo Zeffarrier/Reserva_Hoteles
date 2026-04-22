@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import type { Room } from '../store/hotelStore'
+import { useHotelStore } from '../store/hotelStore'
+import DateRangePicker from './DateRangePicker.vue'
+import SvgIcon from './SvgIcon.vue'
 
 const props = defineProps<{
   room: Room
@@ -11,30 +14,66 @@ const emit = defineEmits<{
   (e: 'cancel'): void
 }>()
 
+const { searchDates } = useHotelStore()
+
 const clientName = ref('')
 const clientEmail = ref('')
 const clientPhone = ref('')
-const checkIn = ref('')
-const checkOut = ref('')
-
-// Error Prevention (Nielsen): Validaciones
-const minDate = computed(() => {
-  const today = new Date()
-  return today.toISOString().split('T')[0]
+const showDatePicker = ref(false)
+const datePickerRef = ref<HTMLElement | null>(null)
+const dateRange = ref<{ start: Date | null, end: Date | null }>({
+  start: searchDates.start ? new Date(searchDates.start) : null,
+  end: searchDates.end ? new Date(searchDates.end) : null
 })
 
-const checkoutMinDate = computed(() => {
-  if (!checkIn.value) return minDate.value
-  const ciDate = new Date(checkIn.value)
-  ciDate.setDate(ciDate.getDate() + 1) // At least 1 night
-  return ciDate.toISOString().split('T')[0]
+const toggleDatePicker = () => {
+  showDatePicker.value = !showDatePicker.value
+}
+
+const closeDatePicker = () => {
+  showDatePicker.value = false
+}
+
+const handleClickOutside = (event: MouseEvent) => {
+  if (datePickerRef.value && !datePickerRef.value.contains(event.target as Node)) {
+    showDatePicker.value = false
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
+})
+
+const formatDate = (date: Date | null) => {
+  if (!date) return '—'
+  return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+const formatDateRange = computed(() => {
+  if (!dateRange.value.start) return 'Seleccionar fechas'
+  const start = formatDate(dateRange.value.start)
+  if (!dateRange.value.end) return `${start} — Salida`
+  const end = formatDate(dateRange.value.end)
+  return `${start} — ${end}`
+})
+
+const checkInStr = computed(() => {
+  if (!dateRange.value.start) return ''
+  return dateRange.value.start.toISOString().split('T')[0]
+})
+
+const checkOutStr = computed(() => {
+  if (!dateRange.value.end) return ''
+  return dateRange.value.end.toISOString().split('T')[0]
 })
 
 const totalDays = computed(() => {
-  if (!checkIn.value || !checkOut.value) return 0
-  const start = new Date(checkIn.value)
-  const end = new Date(checkOut.value)
-  const diffTime = Math.abs(end.getTime() - start.getTime())
+  if (!dateRange.value.start || !dateRange.value.end) return 0
+  const diffTime = Math.abs(dateRange.value.end.getTime() - dateRange.value.start.getTime())
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24))
 })
 
@@ -46,8 +85,8 @@ const isValid = computed(() => {
   return clientName.value.trim() !== '' && 
          clientEmail.value.includes('@') && 
          clientPhone.value.trim().length >= 6 &&
-         checkIn.value !== '' && 
-         checkOut.value !== '' &&
+         dateRange.value.start !== null && 
+         dateRange.value.end !== null &&
          totalDays.value > 0
 })
 
@@ -57,8 +96,8 @@ const handleSubmit = () => {
       clientName: clientName.value,
       clientEmail: clientEmail.value,
       clientPhone: clientPhone.value,
-      checkIn: checkIn.value,
-      checkOut: checkOut.value,
+      checkIn: checkInStr.value,
+      checkOut: checkOutStr.value,
       totalPrice: totalPrice.value
     })
   }
@@ -109,30 +148,18 @@ const handleSubmit = () => {
         />
       </div>
 
-      <div class="date-row">
-        <div class="input-group">
-          <label class="input-label" for="checkin">Fecha de Entrada</label>
-          <input 
-            id="checkin"
-            v-model="checkIn" 
-            type="date" 
-            class="input-field"
-            :min="minDate"
-            required
-          />
+      <!-- Date Range Picker -->
+      <div class="input-group date-picker-group" ref="datePickerRef">
+        <label class="input-label">Fechas de estadía</label>
+        <div class="date-selector" @click="toggleDatePicker">
+          <SvgIcon name="calendar" :size="18" />
+          <span :class="{ 'placeholder': !dateRange.start }">{{ formatDateRange }}</span>
         </div>
-        <div class="input-group">
-          <label class="input-label" for="checkout">Fecha de Salida</label>
-          <input 
-            id="checkout"
-            v-model="checkOut" 
-            type="date" 
-            class="input-field"
-            :min="checkoutMinDate"
-            required
-            :disabled="!checkIn"
-          />
-        </div>
+        <DateRangePicker 
+          v-if="showDatePicker"
+          v-model="dateRange"
+          @close="closeDatePicker"
+        />
       </div>
 
       <!-- Visibility of System Status (Nielsen): Real-time price calculation -->
@@ -175,10 +202,42 @@ const handleSubmit = () => {
   margin-bottom: var(--spacing-xs);
 }
 
-.date-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--spacing-md);
+.date-picker-group {
+  position: relative;
+}
+
+.date-picker-group :deep(.date-picker-container) {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 700px;
+  max-width: 95vw;
+  z-index: 50;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  border: none;
+}
+
+.date-selector {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 12px 16px;
+  background: var(--color-background);
+  border: 1px solid var(--color-background);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: var(--font-size-md);
+  color: var(--color-text);
+  transition: border-color 0.2s;
+}
+
+.date-selector:hover {
+  border-color: var(--color-primary);
+}
+
+.date-selector .placeholder {
+  color: var(--color-text-light);
 }
 
 .summary-box {

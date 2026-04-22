@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import type { Room } from '../store/hotelStore'
+import SvgIcon from './SvgIcon.vue'
 
 const props = defineProps<{
   room: Room
@@ -39,8 +40,8 @@ const prevImage = () => {
       <img :src="currentImage" :alt="room.name" class="room-image" />
       
       <div v-if="hasMultipleImages" class="carousel-controls">
-        <button @click.stop="prevImage" class="carousel-btn prev-btn">❮</button>
-        <button @click.stop="nextImage" class="carousel-btn next-btn">❯</button>
+        <button @click.stop="prevImage" class="carousel-btn prev-btn"><SvgIcon name="chevron-left" :size="16" /></button>
+        <button @click.stop="nextImage" class="carousel-btn next-btn"><SvgIcon name="chevron-right" :size="16" /></button>
       </div>
       
       <div v-if="hasMultipleImages" class="carousel-indicators">
@@ -54,8 +55,8 @@ const prevImage = () => {
       <p class="description">{{ room.description }}</p>
       
       <div class="room-details">
-        <span class="detail-item">🛏️ {{ room.type }}</span>
-        <span class="detail-item">👤 Máx {{ room.capacity }} pers.</span>
+        <span class="detail-item"><SvgIcon name="bed" :size="16" /> {{ room.type }}</span>
+        <span class="detail-item"><SvgIcon name="user" :size="16" /> Máx {{ room.capacity }} pers.</span>
       </div>
       
       <div v-if="room.amenities && room.amenities.length > 0" class="room-amenities">

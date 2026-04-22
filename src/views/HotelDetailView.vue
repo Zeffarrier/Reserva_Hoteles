@@ -5,6 +5,7 @@ import { useHotelStore } from '../store/hotelStore'
 import RoomCard from '../components/RoomCard.vue'
 import BookingForm from '../components/BookingForm.vue'
 import RoomDetailsModal from '../components/RoomDetailsModal.vue'
+import SvgIcon from '../components/SvgIcon.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -17,6 +18,7 @@ const rooms = computed(() => getRoomsForHotel(hotelId))
 const selectedRoomId = ref<string | null>(null)
 const selectedDetailsRoomId = ref<string | null>(null)
 const bookingSuccess = ref(false)
+const isBookingClosing = ref(false)
 
 const selectedRoom = computed(() => {
   return rooms.value.find(r => r.id === selectedRoomId.value)
@@ -33,7 +35,6 @@ const goBack = () => {
 const handleBook = (roomId: string) => {
   selectedRoomId.value = roomId
   bookingSuccess.value = false
-  window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 const handleShowDetails = (roomId: string) => {
@@ -50,7 +51,11 @@ const handleBookFromModal = (roomId: string) => {
 }
 
 const cancelBooking = () => {
-  selectedRoomId.value = null
+  isBookingClosing.value = true
+  setTimeout(() => {
+    selectedRoomId.value = null
+    isBookingClosing.value = false
+  }, 250)
 }
 
 const submitBooking = (data: any) => {
@@ -76,7 +81,7 @@ onMounted(() => {
   <div class="view-container" v-if="hotel">
     <div class="back-nav">
       <button class="btn-back" @click="goBack">
-        ← Volver a resultados
+        <SvgIcon name="arrow-left" :size="16" /> Volver a resultados
       </button>
     </div>
 
@@ -86,7 +91,7 @@ onMounted(() => {
         <div class="badge city-badge">{{ hotel.city }}</div>
         <h1>{{ hotel.name }}</h1>
         <div class="rating">
-          <span class="star">★</span>
+          <span class="star"><SvgIcon name="star" :size="18" /></span>
           <span>{{ hotel.rating }} / 5</span>
         </div>
         <p class="hotel-desc">{{ hotel.description }}</p>
@@ -102,20 +107,8 @@ onMounted(() => {
         <button class="btn btn-primary" @click="bookingSuccess = false">Ver más habitaciones</button>
       </div>
 
-      <!-- Booking Flow -->
-      <div v-if="selectedRoom" class="booking-section animate-fade-in">
-        <button class="btn-back" @click="cancelBooking">
-          ← Volver a habitaciones
-        </button>
-        <BookingForm 
-          :room="selectedRoom" 
-          @cancel="cancelBooking"
-          @submit="submitBooking"
-        />
-      </div>
-
-      <!-- Rooms Listing -->
-      <div v-else>
+      <!-- Rooms Listing (always visible) -->
+      <div>
         <h2 class="section-title">Habitaciones Disponibles</h2>
         <div v-if="rooms.length > 0" class="rooms-grid">
           <RoomCard 
@@ -138,6 +131,17 @@ onMounted(() => {
         @close="closeDetailsModal"
         @book="handleBookFromModal"
       />
+
+      <!-- Booking Form Modal -->
+      <div v-if="selectedRoom" class="booking-modal-overlay" :class="{ closing: isBookingClosing }" @click.self="cancelBooking">
+        <div class="booking-modal-container" :class="{ closing: isBookingClosing }">
+          <BookingForm 
+            :room="selectedRoom" 
+            @cancel="cancelBooking"
+            @submit="submitBooking"
+          />
+        </div>
+      </div>
     </main>
   </div>
 </template>
@@ -251,6 +255,60 @@ onMounted(() => {
 .booking-section {
   max-width: 800px;
   margin: 0 auto;
+}
+
+.booking-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  overflow-y: auto;
+  z-index: 1000;
+  padding: 40px 24px;
+  animation: bookingOverlayIn 0.3s ease-out;
+}
+
+.booking-modal-overlay.closing {
+  animation: bookingOverlayOut 0.25s ease-in forwards;
+}
+
+@keyframes bookingOverlayIn {
+  from { backdrop-filter: blur(0px); background-color: rgba(0, 0, 0, 0); }
+  to { backdrop-filter: blur(12px); background-color: rgba(0, 0, 0, 0.4); }
+}
+
+@keyframes bookingOverlayOut {
+  from { backdrop-filter: blur(12px); background-color: rgba(0, 0, 0, 0.4); }
+  to { backdrop-filter: blur(0px); background-color: rgba(0, 0, 0, 0); }
+}
+
+.booking-modal-container {
+  width: 100%;
+  max-width: 520px;
+  animation: slideUp 0.3s ease-out;
+}
+
+.booking-modal-container.closing {
+  animation: slideDown 0.25s ease-in forwards;
+}
+
+
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(40px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideDown {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(40px); }
 }
 
 .alert {
