@@ -1,19 +1,62 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useHotelStore } from '../store/hotelStore'
 import ReservationList from '../components/ReservationList.vue'
+import CustomDialog from '../components/CustomDialog.vue'
 
 const { state, confirmReservation, cancelReservation } = useHotelStore()
 
-const handleConfirm = (id: string) => {
-  if (confirm(`¿Estás seguro de confirmar la reserva ${id}?`)) {
-    confirmReservation(id)
+// Generic Dialog State
+const dialog = ref({
+  show: false,
+  title: '',
+  message: '',
+  confirmText: 'Aceptar',
+  cancelText: 'Cancelar',
+  isDanger: false,
+  showCancel: false,
+  onConfirm: () => {}
+})
+
+const triggerDialog = (title: string, message: string, onConfirm = () => {}, isDanger = false, showCancel = true, confirmText?: string) => {
+  dialog.value = {
+    show: true,
+    title,
+    message,
+    confirmText: confirmText || (isDanger ? 'Eliminar' : 'Confirmar'),
+    cancelText: 'Cancelar',
+    isDanger,
+    showCancel,
+    onConfirm: () => {
+      onConfirm()
+      dialog.value.show = false
+    }
   }
 }
 
-const handleCancel = (id: string) => {
-  if (confirm(`ATENCIÓN: ¿Estás seguro de cancelar la reserva ${id}? Esta acción liberará la habitación.`)) {
-    cancelReservation(id)
+const handleConfirm = (id: string) => {
+  const res = state.reservations.find(r => r.id === id)
+  if (res) {
+    const roomExists = state.rooms.some(r => r.id === res.roomId)
+    if (!roomExists) {
+      triggerDialog('Error de Validación', 'No puedes aprobar esta reserva. La habitación asociada ya no existe o fue eliminada del sistema.', () => {}, true, false, 'Entendido')
+      return
+    }
   }
+  triggerDialog(
+    'Confirmar Reserva',
+    `¿Estás seguro de confirmar la reserva <strong>${id}</strong>?`,
+    () => confirmReservation(id)
+  )
+}
+
+const handleCancel = (id: string) => {
+  triggerDialog(
+    'Cancelar Reserva',
+    `ATENCIÓN: ¿Estás seguro de cancelar la reserva <strong>${id}</strong>? Esta acción liberará la habitación.`,
+    () => cancelReservation(id),
+    true
+  )
 }
 </script>
 
@@ -35,9 +78,20 @@ const handleCancel = (id: string) => {
           :reservations="state.reservations"
           :show-actions="true"
           @confirm="handleConfirm"
-          @cancel="handleCancel"
         />
       </div>
+
+      <CustomDialog 
+        :show="dialog.show"
+        :title="dialog.title"
+        :message="dialog.message"
+        :confirm-text="dialog.confirmText"
+        :cancel-text="dialog.cancelText"
+        :is-danger="dialog.isDanger"
+        :show-cancel="dialog.showCancel"
+        @confirm="dialog.onConfirm"
+        @cancel="dialog.show = false"
+      />
     </main>
   </div>
 </template>

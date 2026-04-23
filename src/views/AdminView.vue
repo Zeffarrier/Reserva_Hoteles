@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { useHotelStore, type Hotel, type Room, type RoomExtendedDetails } from '../store/hotelStore'
+import { useHotelStore, type Hotel, type Room, type RoomExtendedDetails, type Reservation } from '../store/hotelStore'
 import ReservationList from '../components/ReservationList.vue'
 import SvgIcon from '../components/SvgIcon.vue'
 import LocationPickerMap from '../components/LocationPickerMap.vue'
 
-const { state, addHotel, updateHotel, deleteHotel, addRoom, deleteRoom, updateRoom } = useHotelStore()
+const { state, addHotel, updateHotel, deleteHotel, addRoom, deleteRoom, updateRoom, cancelReservation, confirmReservation, updateReservation } = useHotelStore()
 
 const currentTab = ref<'dashboard' | 'hotels' | 'reservations'>('dashboard')
 
@@ -16,6 +16,8 @@ watch(currentTab, () => {
   showRoomForm.value = false
   isEditingRoom.value = false
   editingRoomId.value = null
+  showEditReservation.value = false
+  editingResId.value = null
 })
 
 // Dashboard stats
@@ -47,10 +49,21 @@ const hotelForm = ref({
   lng: -79.5209
 })
 
+const hotelFormError = ref('')
+
+const validateHotelForm = () => {
+  if (!hotelForm.value.name.trim()) return 'El nombre del hotel es obligatorio.'
+  if (!hotelForm.value.city.trim()) return 'La ciudad es obligatoria.'
+  if (!hotelForm.value.image.trim()) return 'La imagen es obligatoria.'
+  if (!hotelForm.value.description.trim()) return 'La descripción es obligatoria.'
+  return null
+}
+
 const openNewHotelForm = () => {
   isEditing.value = false
   editingHotelId.value = null
   hotelForm.value = { name: '', city: '', description: '', image: '', rating: 5, lat: 8.9824, lng: -79.5209 }
+  hotelFormError.value = ''
   showHotelForm.value = true
   showRoomForm.value = false
 }
@@ -59,17 +72,43 @@ const openEditHotelForm = (hotel: Hotel) => {
   isEditing.value = true
   editingHotelId.value = hotel.id
   hotelForm.value = { ...hotel }
+  hotelFormError.value = ''
   showHotelForm.value = true
   showRoomForm.value = false
 }
 
 const saveHotel = () => {
+  const error = validateHotelForm()
+  if (error) {
+    hotelFormError.value = error
+    return
+  }
+
   if (isEditing.value && editingHotelId.value) {
     updateHotel(editingHotelId.value, hotelForm.value)
+    showHotelForm.value = false
   } else {
-    addHotel(hotelForm.value)
+    const newId = addHotel(hotelForm.value)
+    showHotelForm.value = false
   }
-  showHotelForm.value = false
+}
+
+const saveHotelAndStay = () => {
+  const error = validateHotelForm()
+  if (error) {
+    hotelFormError.value = error
+    return true // Return true to indicate error
+  }
+
+  hotelFormError.value = ''
+  if (!isEditing.value) {
+    const newId = addHotel(hotelForm.value)
+    editingHotelId.value = newId
+    isEditing.value = true
+  } else if (editingHotelId.value) {
+    updateHotel(editingHotelId.value, hotelForm.value)
+  }
+  return false
 }
 
 // Room Management
@@ -124,6 +163,24 @@ const toggleAmenityCategory = (category: string, checked: boolean) => {
     roomForm.value.categorizedAmenities[category] = ''
   } else {
     delete roomForm.value.categorizedAmenities[category]
+  }
+}
+
+const showSaveConfirmModal = ref(false)
+
+const handleRoomAddClick = () => {
+  if (!isEditing.value) {
+    showSaveConfirmModal.value = true
+  } else {
+    openNewRoomForm()
+  }
+}
+
+const confirmSaveAndAddRoom = () => {
+  const hasError = saveHotelAndStay()
+  if (!hasError) {
+    showSaveConfirmModal.value = false
+    openNewRoomForm()
   }
 }
 
@@ -311,13 +368,89 @@ const selectedHotelRooms = computed(() => {
   if (!selectedHotel.value) return []
   return state.rooms.filter(r => r.hotelId === selectedHotel.value!.id)
 })
+
+// Reservation Management
+const showEditReservation = ref(false)
+const editingResId = ref<string | null>(null)
+const reservationForm = ref({
+  clientName: '',
+  clientEmail: '',
+  checkIn: '',
+  checkOut: '',
+  totalPrice: 0,
+  status: 'Pending' as 'Pending' | 'Confirmed' | 'Cancelled'
+})
+
+const openEditReservation = (res: Reservation) => {
+  editingResId.value = res.id
+  reservationForm.value = {
+    clientName: res.clientName,
+    clientEmail: res.clientEmail,
+    checkIn: res.checkIn,
+    checkOut: res.checkOut,
+    totalPrice: res.totalPrice,
+    status: res.status
+  }
+  showEditReservation.value = true
+}
+
+const showErrorModal = ref(false)
+const errorMessage = ref('')
+
+const triggerError = (msg: string) => {
+  errorMessage.value = msg
+  showErrorModal.value = true
+}
+
+const saveReservation = () => {
+  if (editingResId.value) {
+    const res = state.reservations.find(r => r.id === editingResId.value)
+    if (reservationForm.value.status === 'Confirmed') {
+      const room = state.rooms.find(room => room.id === res?.roomId)
+      if (!room) {
+        triggerError('No se puede confirmar esta reservación porque la habitación ya no existe.')
+        return
+      }
+    }
+    updateReservation(editingResId.value, reservationForm.value)
+    showEditReservation.value = false
+    editingResId.value = null
+  }
+}
+
+const showCancelResConfirm = ref(false)
+const resIdToCancel = ref<string | null>(null)
+
+const handleCancelRes = (id: string) => {
+  resIdToCancel.value = id
+  showCancelResConfirm.value = true
+}
+
+const confirmCancelResAction = () => {
+  if (resIdToCancel.value) {
+    cancelReservation(resIdToCancel.value)
+    showCancelResConfirm.value = false
+    resIdToCancel.value = null
+  }
+}
+
+const handleConfirmRes = (id: string) => {
+  const res = state.reservations.find(r => r.id === id)
+  const room = state.rooms.find(room => room.id === res?.roomId)
+  
+  if (!room) {
+    triggerError('No se puede confirmar esta reservación porque la habitación ya no existe.')
+    return
+  }
+  
+  confirmReservation(id)
+}
 </script>
 
 <template>
   <div class="view-container">
     <header class="view-header">
       <h1>Panel de Administración</h1>
-      <p>Gestión centralizada del sistema</p>
     </header>
     
     <div class="admin-tabs">
@@ -374,14 +507,22 @@ const selectedHotelRooms = computed(() => {
         <div v-if="showHotelForm" class="edit-layout animate-fade-in">
           <div class="form-card">
             <h3>{{ isEditing ? 'Editar Hotel' : 'Crear Nuevo Hotel' }}</h3>
+            
+            <div v-if="hotelFormError" class="form-error-alert animate-fade-in">
+              <SvgIcon name="info" :size="18" />
+              <span>{{ hotelFormError }}</span>
+            </div>
+
             <form @submit.prevent="saveHotel" class="form-body">
-              <div class="input-group">
-                <label class="input-label">Nombre del Hotel</label>
-                <input v-model="hotelForm.name" type="text" class="input-field" required />
-              </div>
-              <div class="input-group">
-                <label class="input-label">Ciudad</label>
-                <input v-model="hotelForm.city" type="text" class="input-field" required />
+              <div class="form-row">
+                <div class="input-group half">
+                  <label class="input-label">Nombre del Hotel</label>
+                  <input v-model="hotelForm.name" type="text" class="input-field" required />
+                </div>
+                <div class="input-group half">
+                  <label class="input-label">Ciudad</label>
+                  <input v-model="hotelForm.city" type="text" class="input-field" required />
+                </div>
               </div>
               <div class="input-group">
                 <label class="input-label">URL o Ruta de Imagen</label>
@@ -390,10 +531,6 @@ const selectedHotelRooms = computed(() => {
               <div class="input-group">
                 <label class="input-label">Descripción</label>
                 <textarea v-model="hotelForm.description" class="input-field" rows="3" required></textarea>
-              </div>
-              <div class="input-group">
-                <label class="input-label">Calificación (Estrellas)</label>
-                <input v-model="hotelForm.rating" type="number" step="0.5" min="1" max="5" class="input-field" required />
               </div>
               <div class="input-group">
                 <label class="input-label">Ubicación en el Mapa</label>
@@ -417,30 +554,40 @@ const selectedHotelRooms = computed(() => {
             </form>
           </div>
 
-          <!-- ROOM MANAGEMENT (Only visible when editing an existing hotel) -->
-          <div v-if="isEditing" class="rooms-card">
+          <!-- ROOM MANAGEMENT (Visible in both Create and Edit modes for consistent design) -->
+          <div class="rooms-card">
             <div class="section-header-sm">
               <h4>Habitaciones del Hotel</h4>
-              <button class="btn btn-outline" @click="openNewRoomForm" v-if="!showRoomForm">+ Añadir Habitación</button>
+              <button class="btn btn-outline" @click="handleRoomAddClick" v-if="!showRoomForm">+ Añadir Habitación</button>
             </div>
 
             <div class="rooms-scroll-area">
-              <div class="existing-rooms-list" v-if="!showRoomForm">
-                <div v-for="room in getHotelRooms(editingHotelId)" :key="room.id" class="mini-room-card">
-                <div class="mini-room-info">
-                  <span><strong>{{ room.name }}</strong> ({{ room.type }})</span>
-                  <span class="price-badge">${{ room.pricePerNight }}/noche</span>
+              <!-- Case 1: New Hotel (Must save first) -->
+              <div v-if="!isEditing && !showRoomForm" class="rooms-empty-state animate-fade-in">
+                <div class="empty-icon-wrapper">
+                  <SvgIcon name="info" :size="32" />
                 </div>
-                <div class="mini-room-actions">
-                  <button type="button" class="btn-edit-room" @click="openEditRoomForm(room)" title="Editar Habitación">
-                    <SvgIcon name="edit" :size="16" />
-                  </button>
-                  <button type="button" class="btn-delete-room" @click="confirmDeleteRoom(room.id, room.name)" title="Eliminar Habitación">
-                    <SvgIcon name="close" :size="16" />
-                  </button>
-                </div>
+                <p>Para añadir habitaciones, primero debes guardar la información básica del hotel.</p>
+                <button class="btn btn-primary btn-sm" @click="saveHotelAndStay">Guardar y añadir habitaciones</button>
               </div>
-                <p v-if="getHotelRooms(editingHotelId).length === 0" class="text-light-sm">Aún no hay habitaciones creadas.</p>
+
+              <!-- Case 2: Existing Hotel rooms list -->
+              <div v-else-if="!showRoomForm" class="existing-rooms-list">
+                <div v-for="room in getHotelRooms(editingHotelId)" :key="room.id" class="mini-room-card">
+                  <div class="mini-room-info">
+                    <span><strong>{{ room.name }}</strong> ({{ room.type }})</span>
+                    <span class="price-badge">${{ room.pricePerNight }}/noche</span>
+                  </div>
+                  <div class="mini-room-actions">
+                    <button type="button" class="btn-edit-room" @click="openEditRoomForm(room)" title="Editar Habitación">
+                      <SvgIcon name="edit" :size="16" />
+                    </button>
+                    <button type="button" class="btn-delete-room" @click="confirmDeleteRoom(room.id, room.name)" title="Eliminar Habitación">
+                      <SvgIcon name="close" :size="16" />
+                    </button>
+                  </div>
+                </div>
+                <p v-if="isEditing && getHotelRooms(editingHotelId).length === 0" class="text-light-sm">Aún no hay habitaciones creadas.</p>
               </div>
 
               <div v-if="showRoomForm" class="nested-form-card">
@@ -562,7 +709,6 @@ const selectedHotelRooms = computed(() => {
             <div class="details-info">
               <h4>{{ selectedHotel.name }}</h4>
               <p class="location"><SvgIcon name="location" :size="16" /> {{ selectedHotel.city }} (Lat: {{ selectedHotel.lat }}, Lng: {{ selectedHotel.lng }})</p>
-              <p class="rating"><SvgIcon name="star" :size="16" /> {{ selectedHotel.rating }} Estrellas</p>
               <p class="rooms">Habitaciones registradas: <strong>{{ getHotelRoomsCount(selectedHotel.id) }}</strong></p>
               <div class="description-box">
                 <h5>Descripción</h5>
@@ -577,6 +723,9 @@ const selectedHotelRooms = computed(() => {
                       <h6>{{ room.name }}</h6>
                       <p class="room-meta">{{ room.type }} | Capacidad: {{ room.capacity }} pers. | <strong>${{ room.pricePerNight }}/noche</strong></p>
                     </div>
+                    <span class="availability-badge" :class="room.isAvailable ? 'available' : 'occupied'">
+                      {{ room.isAvailable ? 'Disponible' : 'Ocupada' }}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -590,7 +739,6 @@ const selectedHotelRooms = computed(() => {
               <tr>
                 <th>Nombre</th>
                 <th>Ciudad</th>
-                <th>Calificación</th>
                 <th>Acciones</th>
               </tr>
             </thead>
@@ -598,7 +746,6 @@ const selectedHotelRooms = computed(() => {
               <tr v-for="hotel in filteredHotels" :key="hotel.id">
                 <td><strong>{{ hotel.name }}</strong></td>
                 <td>{{ hotel.city }}</td>
-                <td>{{ hotel.rating }} <SvgIcon name="star" :size="14" /></td>
                 <td class="action-buttons">
                   <button class="btn btn-secondary btn-sm" @click="viewHotelDetails(hotel)">Ver Info</button>
                   <button class="btn btn-outline btn-sm" @click="openEditHotelForm(hotel)">Editar</button>
@@ -606,7 +753,7 @@ const selectedHotelRooms = computed(() => {
                 </td>
               </tr>
               <tr v-if="filteredHotels.length === 0">
-                <td colspan="4" class="text-center">No se encontraron hoteles en la ciudad buscada.</td>
+                <td colspan="3" class="text-center">No se encontraron hoteles en la ciudad buscada.</td>
               </tr>
             </tbody>
           </table>
@@ -615,11 +762,67 @@ const selectedHotelRooms = computed(() => {
 
       <!-- RESERVATIONS TAB -->
       <div v-if="currentTab === 'reservations'" class="animate-fade-in">
-        <h2>Historial General de Reservaciones</h2>
+        <div class="section-header" v-if="!showEditReservation">
+          <h2>Gestión de Reservaciones</h2>
+        </div>
+        
         <ReservationList 
+          v-if="!showEditReservation"
           :reservations="state.reservations"
-          :show-actions="false"
+          :show-actions="true"
+          @cancel="handleCancelRes"
+          @confirm="handleConfirmRes"
+          @edit="openEditReservation"
         />
+
+        <div v-if="showEditReservation" class="form-card animate-fade-in">
+          <h3>Editar Reservación {{ editingResId }}</h3>
+          
+          <div v-if="editingResId && !state.rooms.find(room => room.id === state.reservations.find(r => r.id === editingResId)?.roomId)" 
+               class="form-error-alert animate-fade-in" style="margin-bottom: 20px; background-color: #fff1f2; border-color: #fda4af; color: #be123c;">
+            <SvgIcon name="info" :size="18" />
+            <span>Atención: La habitación original ha sido eliminada. No es posible confirmar esta reservación.</span>
+          </div>
+
+          <form @submit.prevent="saveReservation" class="form-body">
+            <div class="input-group">
+              <label class="input-label">Nombre del Cliente</label>
+              <input v-model="reservationForm.clientName" type="text" class="input-field disabled" disabled />
+            </div>
+            <div class="input-group">
+              <label class="input-label">Email del Cliente</label>
+              <input v-model="reservationForm.clientEmail" type="email" class="input-field disabled" disabled />
+            </div>
+            <div class="form-row">
+              <div class="input-group half">
+                <label class="input-label">Check-in</label>
+                <input v-model="reservationForm.checkIn" type="date" class="input-field" required />
+              </div>
+              <div class="input-group half">
+                <label class="input-label">Check-out</label>
+                <input v-model="reservationForm.checkOut" type="date" class="input-field" required />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="input-group half">
+                <label class="input-label">Precio Total ($)</label>
+                <input v-model="reservationForm.totalPrice" type="number" min="0" class="input-field disabled" disabled />
+              </div>
+              <div class="input-group half">
+                <label class="input-label">Estado</label>
+                <select v-model="reservationForm.status" class="input-field" required>
+                  <option value="Pending">Pendiente</option>
+                  <option value="Confirmed">Confirmada</option>
+                  <option value="Cancelled">Cancelada</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-actions">
+              <button type="button" class="btn btn-secondary" @click="showEditReservation = false">Cancelar</button>
+              <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+            </div>
+          </form>
+        </div>
       </div>
 
       <!-- Custom Delete Confirmation Modal -->
@@ -638,6 +841,51 @@ const selectedHotelRooms = computed(() => {
         </div>
       </div>
     </main>
+
+    <!-- Custom Confirmation Modal (Premium Design) -->
+    <div v-if="showSaveConfirmModal" class="admin-modal-overlay animate-fade-in">
+      <div class="admin-modal animate-slide-up">
+        <div class="modal-icon-wrapper info-icon">
+          <SvgIcon name="info" :size="32" />
+        </div>
+        <h3 class="modal-title">Acción Requerida</h3>
+        <p class="modal-message">Para añadir habitaciones, primero debemos guardar la información del hotel.</p>
+        <p class="modal-submessage" style="color: var(--color-text-light); margin-top: 8px;">¿Deseas guardar los cambios actuales y continuar?</p>
+        <div class="modal-actions-container">
+          <button class="btn btn-secondary" @click="showSaveConfirmModal = false">Cancelar</button>
+          <button class="btn btn-primary" @click="confirmSaveAndAddRoom">Guardar y Continuar</button>
+        </div>
+      </div>
+    </div>
+    <!-- Modal de Confirmación para Cancelar Reservación -->
+    <div v-if="showCancelResConfirm" class="admin-modal-overlay animate-fade-in">
+      <div class="admin-modal animate-slide-up">
+        <div class="modal-icon-wrapper danger-icon">
+          <SvgIcon name="close" :size="32" />
+        </div>
+        <h3 class="modal-title">Cancelar Reservación</h3>
+        <p class="modal-message">¿Estás seguro de que deseas cancelar esta reservación?</p>
+        <p class="modal-submessage">Esta acción no se puede deshacer.</p>
+        <div class="modal-actions-container">
+          <button class="btn btn-secondary" @click="showCancelResConfirm = false">Volver</button>
+          <button class="btn-danger-action" @click="confirmCancelResAction">Confirmar Cancelación</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de Error/Advertencia Personalizado -->
+    <div v-if="showErrorModal" class="admin-modal-overlay animate-fade-in">
+      <div class="admin-modal animate-slide-up">
+        <div class="modal-icon-wrapper danger-icon">
+          <SvgIcon name="info" :size="32" />
+        </div>
+        <h3 class="modal-title">Operación No Permitida</h3>
+        <p class="modal-message">{{ errorMessage }}</p>
+        <div class="modal-actions-container" style="margin-top: 24px;">
+          <button class="btn btn-primary" @click="showErrorModal = false">Entendido</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -735,11 +983,39 @@ const selectedHotelRooms = computed(() => {
 
 .form-card {
   background: var(--color-surface);
-  padding: var(--spacing-xl);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
-  max-width: 600px;
+  max-width: none;
   margin: 0 auto;
+  max-height: 692px;
+  overflow-y: auto;
+  padding: var(--spacing-xl);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+}
+
+.form-card::-webkit-scrollbar {
+  width: 6px;
+  background: transparent;
+}
+
+.form-card::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.form-card::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 999px;
+}
+
+.form-card::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.form-card::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .form-card h3 {
@@ -967,6 +1243,32 @@ const selectedHotelRooms = computed(() => {
   max-height: 300px;
   overflow-y: auto;
   padding-right: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+}
+
+.rooms-list::-webkit-scrollbar {
+  width: 6px;
+  background: transparent;
+}
+
+.rooms-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.rooms-list::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 999px;
+}
+
+.rooms-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.rooms-list::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .room-item {
@@ -976,6 +1278,26 @@ const selectedHotelRooms = computed(() => {
   background: var(--color-background);
   border-radius: var(--radius-md);
   align-items: center;
+}
+
+.availability-badge {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.availability-badge.available {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.availability-badge.occupied {
+  background: #fee2e2;
+  color: #dc2626;
 }
 
 .room-item-img {
@@ -1026,8 +1348,8 @@ const selectedHotelRooms = computed(() => {
   }
   .edit-layout .form-card {
     margin: 0;
-    flex: 1;
-    max-width: 500px;
+    flex: 1.2;
+    max-width: none;
   }
 }
 
@@ -1048,6 +1370,32 @@ const selectedHotelRooms = computed(() => {
   overflow-y: auto;
   padding-right: 8px;
   margin-top: var(--spacing-md);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+}
+
+.rooms-scroll-area::-webkit-scrollbar {
+  width: 6px;
+  background: transparent;
+}
+
+.rooms-scroll-area::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.rooms-scroll-area::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 999px;
+}
+
+.rooms-scroll-area::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.rooms-scroll-area::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .section-header-sm {
@@ -1230,6 +1578,11 @@ const selectedHotelRooms = computed(() => {
   margin: 0 auto var(--spacing-md);
 }
 
+.info-icon {
+  background-color: var(--color-primary-light);
+  color: var(--color-primary);
+}
+
 .danger-icon {
   color: #ef4444;
 }
@@ -1285,6 +1638,38 @@ const selectedHotelRooms = computed(() => {
   box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.4);
 }
 
+.rooms-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 40px 20px;
+  background: var(--color-background);
+  border-radius: var(--radius-md);
+  border: 2px dashed #e2e8f0;
+  height: 100%;
+}
+
+.empty-icon-wrapper {
+  background-color: #f1f5f9;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-bottom: 16px;
+  color: var(--color-primary);
+}
+
+.rooms-empty-state p {
+  color: var(--color-text-light);
+  font-size: 0.95rem;
+  margin-bottom: 20px;
+  line-height: 1.4;
+}
+
 .form-error-alert {
   background-color: #fef2f2;
   color: #dc2626;
@@ -1297,5 +1682,12 @@ const selectedHotelRooms = computed(() => {
   gap: 8px;
   font-size: 0.9rem;
   font-weight: 500;
+}
+
+.input-field.disabled {
+  background-color: #f1f5f9;
+  cursor: not-allowed;
+  color: var(--color-text-light);
+  border-color: #e2e8f0;
 }
 </style>

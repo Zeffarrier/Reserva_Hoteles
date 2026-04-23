@@ -63,6 +63,7 @@ const handleClickOutside = (event: MouseEvent) => {
 }
 
 onMounted(async () => {
+  document.body.style.overflow = 'hidden'
   document.addEventListener('click', handleClickOutside)
 
   stripe = await loadStripe('pk_test_51TP5b42d58jTB0VSFEvgLVudhzB6273m8AIBG7V0aFBM5hufeIj5bOtn5QqAjyxG9UGuB6raOfyaip6qNyRNV2Qp00UOf3T0Jc')
@@ -108,6 +109,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  document.body.style.overflow = ''
   document.removeEventListener('click', handleClickOutside)
   if (cardNumber) cardNumber.destroy()
   if (cardExpiry) cardExpiry.destroy()
@@ -178,8 +180,9 @@ const handleSubmit = () => {
       <p>Estás reservando: <strong>{{ room.name }}</strong></p>
     </div>
 
-    <form @submit.prevent="handleSubmit" class="form-body">
-      <div class="input-group">
+    <div class="form-content">
+      <form id="bookingForm" @submit.prevent="handleSubmit" class="form-body">
+        <div class="input-group">
         <label class="input-label" for="name">Nombre Completo</label>
         <input 
           id="name"
@@ -279,45 +282,61 @@ const handleSubmit = () => {
           <div v-if="stripeError" class="stripe-error">{{ stripeError }}</div>
         </div>
       </div>
+      </form>
+    </div>
 
-      <!-- Visibility of System Status (Nielsen): Real-time price calculation -->
-      <div v-if="totalDays > 0" class="summary-box">
-        <div class="summary-row">
-          <span>Estancia ({{ totalDays }} noches x ${{ room.pricePerNight }})</span>
-          <span>${{ totalPrice }}</span>
-        </div>
-        <div class="summary-total">
-          <span>Total a Pagar</span>
-          <span>${{ totalPrice }}</span>
+    <div class="form-footer">
+      <div class="footer-info">
+        <div v-if="totalDays > 0" class="summary-box-compact">
+          <div class="summary-total">
+            <span>Total a Pagar:</span>
+            <span>${{ totalPrice }}</span>
+          </div>
+          <div class="taxes-text">Estancia: {{ totalDays }} noches x ${{ room.pricePerNight }}</div>
         </div>
       </div>
 
       <div class="form-actions">
         <button type="button" class="btn btn-secondary" @click="emit('cancel')">Cancelar</button>
-        <button type="submit" class="btn btn-primary" :disabled="!isValid">Confirmar y Pagar</button>
+        <button type="submit" form="bookingForm" class="btn btn-primary" :disabled="!isValid">Confirmar y Pagar</button>
       </div>
-    </form>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .booking-form {
   background: var(--color-surface);
-  padding: var(--spacing-xl);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
-  max-width: 650px;
-  margin: 0 auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .form-header {
-  margin-bottom: var(--spacing-lg);
-  text-align: center;
+  padding: 24px 32px;
+  border-bottom: 1px solid #eaeaea;
+  text-align: left;
 }
 
 .form-header h2 {
   color: var(--color-primary);
-  margin-bottom: var(--spacing-xs);
+  margin-bottom: 4px;
+}
+
+.form-content {
+  padding: 24px 32px;
+}
+
+.form-footer {
+  padding: 24px 32px;
+  border-top: 1px solid #eaeaea;
+  background: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
 }
 
 .date-picker-group {
@@ -358,37 +377,30 @@ const handleSubmit = () => {
   color: var(--color-text-light);
 }
 
-.summary-box {
-  background: var(--color-background);
-  padding: var(--spacing-md);
-  border-radius: var(--radius-md);
-  margin: var(--spacing-lg) 0;
-  border: 1px dashed var(--color-primary-light);
-}
-
-.summary-row {
+.summary-box-compact {
   display: flex;
-  justify-content: space-between;
-  color: var(--color-text-light);
-  margin-bottom: var(--spacing-sm);
-  font-size: var(--font-size-sm);
+  flex-direction: column;
 }
 
 .summary-total {
-  display: flex;
-  justify-content: space-between;
+  font-size: 1.2rem;
   font-weight: 700;
-  font-size: var(--font-size-lg);
   color: var(--color-primary);
-  border-top: 1px solid #e2e8f0;
-  padding-top: var(--spacing-sm);
+  display: flex;
+  gap: 12px;
+}
+
+.taxes-text {
+  font-size: 0.9rem;
+  color: var(--color-text-light);
+  margin-top: 4px;
 }
 
 .form-actions {
   display: flex;
   justify-content: flex-end;
   gap: var(--spacing-md);
-  margin-top: var(--spacing-lg);
+  margin-top: 0;
 }
 
 .payment-section {

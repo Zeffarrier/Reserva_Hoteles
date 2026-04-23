@@ -262,11 +262,39 @@ const loadState = (): State => {
       if (!parsed.hotels) {
         parsed.hotels = defaultState.hotels
       }
-      // fix rooms if they don't have hotelId
-      parsed.rooms = parsed.rooms.map((r: any) => ({
-        ...r,
-        hotelId: r.hotelId || 'h1'
-      }))
+      // fix rooms if they don't have hotelId and migrate legacy icons
+      parsed.rooms = parsed.rooms.map((r: any) => {
+        // Fix legacy emojis and incorrect info icons in highlightAmenities
+        if (r.extendedDetails?.highlightAmenities) {
+          const emojiMap: Record<string, string> = {
+            '🛏️': 'bed', '❄️': 'snowflake', '☕': 'coffee', '📺': 'tv',
+            '🛋️': 'sofa', '🍽️': 'utensils', '🎧': 'headphones', '✨': 'sparkle',
+            '💼': 'briefcase', '🏔️': 'mountain', '🔒': 'lock'
+          }
+          r.extendedDetails.highlightAmenities = r.extendedDetails.highlightAmenities.map((ha: any) => {
+            if (emojiMap[ha.icon]) {
+              ha.icon = emojiMap[ha.icon]
+            } else if (ha.icon === 'info' || !ha.icon || !['location', 'calendar', 'user', 'users', 'star', 'close', 'arrow-left', 'chevron-left', 'chevron-right', 'hotel', 'money', 'building', 'city', 'bed', 'search', 'snowflake', 'tv', 'coffee', 'sofa', 'utensils', 'headphones', 'sparkle', 'briefcase', 'mountain', 'credit-card', 'lock', 'info', 'edit'].includes(ha.icon)) {
+               // Auto-recover based on text if it defaulted to info or is unknown
+               const t = (ha.text || '').toLowerCase()
+               if (t.includes('cama')) ha.icon = 'bed'
+               else if (t.includes('aire')) ha.icon = 'snowflake'
+               else if (t.includes('tv') || t.includes('pantalla')) ha.icon = 'tv'
+               else if (t.includes('cafe')) ha.icon = 'coffee'
+               else if (t.includes('vista') || t.includes('montaña')) ha.icon = 'mountain'
+               else if (t.includes('trabajo') || t.includes('laptop')) ha.icon = 'briefcase'
+               else if (!ha.icon || ha.icon === 'info') ha.icon = 'info' 
+               else ha.icon = 'info' // fallback to info if unknown and not matched
+            }
+            return ha
+          })
+        }
+        
+        return {
+          ...r,
+          hotelId: r.hotelId || 'h1'
+        }
+      })
 
       // Fix any hotels that have coordinates outside Panama bounds
       parsed.hotels = parsed.hotels.map((h: any) => {
@@ -391,6 +419,15 @@ export const useHotelStore = () => {
     confirmReservation(id: string) {
       const res = state.reservations.find(r => r.id === id)
       if (res) res.status = 'Confirmed'
+    },
+
+    updateReservation(id: string, updates: Partial<Omit<Reservation, 'id'>>) {
+      const index = state.reservations.findIndex(r => r.id === id)
+      if (index !== -1) {
+        state.reservations[index] = { ...state.reservations[index], ...updates }
+        return true
+      }
+      return false
     },
 
     // User Actions
