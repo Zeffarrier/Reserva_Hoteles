@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Reservation } from '../store/hotelStore'
+import { useHotelStore } from '../store/hotelStore'
 
 defineProps<{
   reservations: Reservation[]
@@ -9,6 +10,7 @@ defineProps<{
 const emit = defineEmits<{
   (e: 'cancel', id: string): void
   (e: 'confirm', id: string): void
+  (e: 'edit', reservation: Reservation): void
 }>()
 
 const statusClass = (status: string) => {
@@ -21,6 +23,19 @@ const statusText = (status: string) => {
   if (status === 'Confirmed') return 'Confirmada'
   if (status === 'Pending') return 'Pendiente'
   return 'Cancelada'
+}
+
+const { state } = useHotelStore()
+
+const getRoomDetails = (roomId: string) => {
+  const room = state.rooms.find(r => r.id === roomId)
+  if (!room) return { roomName: 'Habitación Eliminada', hotelName: 'Hotel Desconocido', isDeleted: true }
+  const hotel = state.hotels.find(h => h.id === room.hotelId)
+  return { 
+    roomName: room.name, 
+    hotelName: hotel ? hotel.name : 'Hotel Desconocido',
+    isDeleted: false
+  }
 }
 </script>
 
@@ -36,6 +51,7 @@ const statusText = (status: string) => {
           <tr>
             <th>ID</th>
             <th>Cliente</th>
+            <th>Hotel / Habitación</th>
             <th>Fechas</th>
             <th>Total</th>
             <th>Estado</th>
@@ -49,6 +65,12 @@ const statusText = (status: string) => {
               <div class="client-info">
                 <span class="client-name">{{ res.clientName }}</span>
                 <span class="client-email">{{ res.clientEmail }}</span>
+              </div>
+            </td>
+            <td>
+              <div class="client-info">
+                <span class="client-name" :class="{ 'text-danger': getRoomDetails(res.roomId).isDeleted }">{{ getRoomDetails(res.roomId).hotelName }}</span>
+                <span class="client-email" :class="{ 'text-danger': getRoomDetails(res.roomId).isDeleted }">{{ getRoomDetails(res.roomId).roomName }}</span>
               </div>
             </td>
             <td>
@@ -66,10 +88,19 @@ const statusText = (status: string) => {
             <td v-if="showActions">
               <div class="action-buttons">
                 <button 
+                  class="btn-icon edit" 
+                  @click="emit('edit', res)"
+                  title="Editar"
+                >
+                  ✎
+                </button>
+                <button 
                   v-if="res.status === 'Pending'" 
                   class="btn-icon confirm" 
                   @click="emit('confirm', res.id)"
-                  title="Confirmar"
+                  :title="getRoomDetails(res.roomId).isDeleted ? 'No se puede confirmar: Habitación eliminada' : 'Confirmar'"
+                  :disabled="getRoomDetails(res.roomId).isDeleted"
+                  :style="getRoomDetails(res.roomId).isDeleted ? 'opacity: 0.5; cursor: not-allowed;' : ''"
                 >
                   ✓
                 </button>
@@ -155,6 +186,10 @@ const statusText = (status: string) => {
   color: var(--color-text-light);
 }
 
+.text-danger {
+  color: #dc2626 !important;
+}
+
 .price {
   font-weight: 600;
 }
@@ -194,6 +229,16 @@ const statusText = (status: string) => {
 
 .btn-icon.cancel:hover {
   background-color: var(--color-danger);
+  color: white;
+}
+
+.btn-icon.edit {
+  background-color: #e0e7ff;
+  color: #3730a3;
+}
+
+.btn-icon.edit:hover {
+  background-color: #4f46e5;
   color: white;
 }
 </style>

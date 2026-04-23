@@ -42,6 +42,16 @@ const handleClose = () => {
     emit('close')
   }, 250)
 } // Fake discount logic for UI
+
+import { onMounted, onUnmounted } from 'vue'
+
+onMounted(() => {
+  document.body.style.overflow = 'hidden'
+})
+
+onUnmounted(() => {
+  document.body.style.overflow = ''
+})
 </script>
 
 <template>

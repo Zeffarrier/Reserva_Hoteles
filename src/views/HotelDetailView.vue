@@ -291,7 +291,7 @@ onMounted(() => {
 
 .booking-modal-container {
   width: 100%;
-  max-width: 520px;
+  max-width: 800px;
   animation: slideUp 0.3s ease-out;
 }
 
