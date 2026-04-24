@@ -43,7 +43,7 @@ const hotelForm = ref({
   name: '',
   city: '',
   description: '',
-  image: '',
+  images: [''],
   rating: 5,
   lat: 8.9824,
   lng: -79.5209
@@ -54,7 +54,8 @@ const hotelFormError = ref('')
 const validateHotelForm = () => {
   if (!hotelForm.value.name.trim()) return 'El nombre del hotel es obligatorio.'
   if (!hotelForm.value.city.trim()) return 'La ciudad es obligatoria.'
-  if (!hotelForm.value.image.trim()) return 'La imagen es obligatoria.'
+  const validImages = hotelForm.value.images.filter(img => img.trim() !== '')
+  if (validImages.length === 0) return 'Al menos una imagen es obligatoria.'
   if (!hotelForm.value.description.trim()) return 'La descripción es obligatoria.'
   return null
 }
@@ -62,7 +63,7 @@ const validateHotelForm = () => {
 const openNewHotelForm = () => {
   isEditing.value = false
   editingHotelId.value = null
-  hotelForm.value = { name: '', city: '', description: '', image: '', rating: 5, lat: 8.9824, lng: -79.5209 }
+  hotelForm.value = { name: '', city: '', description: '', images: [''], rating: 5, lat: 8.9824, lng: -79.5209 }
   hotelFormError.value = ''
   showHotelForm.value = true
   showRoomForm.value = false
@@ -71,7 +72,15 @@ const openNewHotelForm = () => {
 const openEditHotelForm = (hotel: Hotel) => {
   isEditing.value = true
   editingHotelId.value = hotel.id
-  hotelForm.value = { ...hotel }
+  hotelForm.value = { 
+    name: hotel.name, 
+    city: hotel.city, 
+    description: hotel.description, 
+    images: hotel.image ? [hotel.image] : [''], 
+    rating: hotel.rating, 
+    lat: hotel.lat, 
+    lng: hotel.lng 
+  }
   hotelFormError.value = ''
   showHotelForm.value = true
   showRoomForm.value = false
@@ -84,11 +93,14 @@ const saveHotel = () => {
     return
   }
 
+  const validImages = hotelForm.value.images.filter(img => img.trim() !== '')
+  const mainImage = validImages.length > 0 ? validImages[0] : ''
+
   if (isEditing.value && editingHotelId.value) {
-    updateHotel(editingHotelId.value, hotelForm.value)
+    updateHotel(editingHotelId.value, { ...hotelForm.value, image: mainImage })
     showHotelForm.value = false
   } else {
-    const newId = addHotel(hotelForm.value)
+    const newId = addHotel({ ...hotelForm.value, image: mainImage })
     showHotelForm.value = false
   }
 }
@@ -101,14 +113,28 @@ const saveHotelAndStay = () => {
   }
 
   hotelFormError.value = ''
+  const validImages = hotelForm.value.images.filter(img => img.trim() !== '')
+  const mainImage = validImages.length > 0 ? validImages[0] : ''
+  
   if (!isEditing.value) {
-    const newId = addHotel(hotelForm.value)
+    const newId = addHotel({ ...hotelForm.value, image: mainImage })
     editingHotelId.value = newId
     isEditing.value = true
   } else if (editingHotelId.value) {
-    updateHotel(editingHotelId.value, hotelForm.value)
+    updateHotel(editingHotelId.value, { ...hotelForm.value, image: mainImage })
   }
   return false
+}
+
+// Hotel Image Management
+const addHotelImageField = () => {
+  hotelForm.value.images.push('')
+}
+
+const removeHotelImageField = (index: number) => {
+  if (hotelForm.value.images.length > 1) {
+    hotelForm.value.images.splice(index, 1)
+  }
 }
 
 // Room Management
@@ -524,10 +550,22 @@ const handleConfirmRes = (id: string) => {
                   <input v-model="hotelForm.city" type="text" class="input-field" required />
                 </div>
               </div>
-              <div class="input-group">
-                <label class="input-label">URL o Ruta de Imagen</label>
-                <input v-model="hotelForm.image" type="text" class="input-field" required />
-              </div>
+  <div class="input-group">
+    <label class="input-label">Rutas de Imágenes</label>
+    <div v-for="(img, idx) in hotelForm.images" :key="idx" class="image-input-row">
+      <input
+        v-model="hotelForm.images[idx]"
+        type="text"
+        class="input-field"
+        :placeholder="idx === 0 ? 'Imagen principal (Obligatoria)' : 'Imagen adicional (Opcional)'"
+        :required="idx === 0"
+      />
+      <button type="button" v-if="hotelForm.images.length > 1" @click="removeHotelImageField(idx)" class="btn-remove-img" title="Quitar">
+        <SvgIcon name="close" :size="16" />
+      </button>
+    </div>
+    <button type="button" class="btn btn-outline btn-sm mt-2" @click="addHotelImageField">+ Añadir otra imagen</button>
+  </div>
               <div class="input-group">
                 <label class="input-label">Descripción</label>
                 <textarea v-model="hotelForm.description" class="input-field" rows="3" required></textarea>

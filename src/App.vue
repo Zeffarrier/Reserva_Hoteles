@@ -19,34 +19,34 @@ const handleLogout = () => {
   <div class="app-wrapper">
     <nav class="main-nav">
       <div class="nav-brand">LuxeStay</div>
-      <div class="nav-links">
-        <!-- Not for Admin -->
-        <RouterLink 
-          v-if="!currentUser || currentUser.role !== 'admin'"
-          to="/" 
-          class="nav-link"
-        >
-          Home
-        </RouterLink>
-        
-        <!-- Only for Receptionist -->
-        <RouterLink 
-          v-if="currentUser && currentUser.role === 'receptionist'" 
-          to="/receptionist" 
-          class="nav-link"
-        >
-          Recepción
-        </RouterLink>
-        
-        <!-- Only for Admin -->
-        <RouterLink 
-          v-if="currentUser && currentUser.role === 'admin'" 
-          to="/admin" 
-          class="nav-link"
-        >
-          Admin
-        </RouterLink>
-      </div>
+  <div class="nav-links">
+    <!-- Home for Client and Guest -->
+    <RouterLink
+      v-if="!currentUser || currentUser.role === 'client'"
+      to="/"
+      class="nav-link"
+    >
+      Home
+    </RouterLink>
+
+    <!-- Only for Receptionist -->
+    <RouterLink
+      v-if="currentUser && currentUser.role === 'receptionist'"
+      to="/receptionist"
+      class="nav-link"
+    >
+      Recepción
+    </RouterLink>
+
+    <!-- Only for Admin -->
+    <RouterLink
+      v-if="currentUser && currentUser.role === 'admin'"
+      to="/admin"
+      class="nav-link"
+    >
+      Admin
+    </RouterLink>
+  </div>
 
       <div class="auth-links">
         <template v-if="currentUser">
