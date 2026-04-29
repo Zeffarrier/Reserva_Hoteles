@@ -16,7 +16,13 @@ export class ApiError extends Error {
 
 async function handleResponse<T>(response: Response): Promise<T> {
   const isJson = response.headers.get('content-type')?.includes('application/json');
-  const data = isJson ? await response.json() : null;
+  let data = null;
+  if (isJson) {
+    const text = await response.text();
+    if (text) {
+      data = JSON.parse(text);
+    }
+  }
 
   if (!response.ok) {
     const errorData: ErrorResponse = (data && data.code && data.message)

@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '../store/authStore'
 import { authService } from '../services/authService'
 
 const router = useRouter()
-const { setAuth } = useAuthStore()
 
 const name = ref('')
 const email = ref('')
@@ -15,9 +13,8 @@ const errorMsg = ref('')
 const handleRegister = async () => {
   errorMsg.value = ''
   try {
-    const res = await authService.register(name.value, email.value, password.value)
-    setAuth(res.user, res.token)
-    router.push('/')
+    await authService.register(name.value, email.value, password.value)
+    router.push('/login')
   } catch (error: any) {
     errorMsg.value = error.message || 'Error al registrar la cuenta. Este correo podría ya estar registrado.'
   }
