@@ -1,11 +1,64 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import { useHotelStore, type Hotel, type Room, type RoomExtendedDetails, type Reservation } from '../store/hotelStore'
-import ReservationList from '../components/ReservationList.vue'
+import { ref, computed, watch, onMounted } from 'vue'
+import ReservationList, { type MappedBooking } from '../components/ReservationList.vue'
 import SvgIcon from '../components/SvgIcon.vue'
 import LocationPickerMap from '../components/LocationPickerMap.vue'
+import { hotelService } from '../services/hotelService'
+import { roomService } from '../services/roomService'
+import { bookingService } from '../services/bookingService'
+import type { Hotel, Room } from '../types/models'
 
-const { state, addHotel, updateHotel, deleteHotel, addRoom, deleteRoom, updateRoom, cancelReservation, confirmReservation, updateReservation } = useHotelStore()
+const hotels = ref<Hotel[]>([])
+const rooms = ref<Room[]>([])
+const reservations = ref<MappedBooking[]>([])
+const isLoading = ref(true)
+
+const fetchAllData = async () => {
+  isLoading.value = true
+  try {
+    const [hRes, bRes] = await Promise.all([
+      hotelService.getHotels(),
+      bookingService.getAllBookings()
+    ])
+    hotels.value = hRes || []
+    
+    const allRooms = []
+    for (const hotel of hotels.value) {
+      const hRooms = await roomService.getRoomsByHotel(hotel.id)
+      allRooms.push(...(hRooms || []))
+    }
+    rooms.value = allRooms
+
+    const mappedBookings: MappedBooking[] = []
+    for (const b of (bRes || [])) {
+      const hotel = hotels.value.find(h => h.id === b.hotel_id)
+      const room = rooms.value.find(r => r.id === b.room_id)
+      
+      mappedBookings.push({
+        id: b.id,
+        clientName: b.guest_name || '',
+        clientEmail: b.guest_email || '',
+        hotelName: hotel ? hotel.name : 'Hotel Desconocido',
+        roomName: room ? room.name : 'Habitación Eliminada',
+        checkIn: b.start_date,
+        checkOut: b.end_date,
+        totalPrice: b.total_price,
+        status: b.status,
+        isDeleted: !room,
+        raw: b
+      })
+    }
+    reservations.value = mappedBookings
+  } catch (error) {
+    console.error("Error fetching admin data", error)
+  } finally {
+    isLoading.value = false
+  }
+}
+
+onMounted(() => {
+  fetchAllData()
+})
 
 const currentTab = ref<'dashboard' | 'hotels' | 'reservations'>('dashboard')
 
@@ -21,16 +74,16 @@ watch(currentTab, () => {
 })
 
 // Dashboard stats
-const totalRooms = computed(() => state.rooms.length)
-const occupiedRooms = computed(() => state.rooms.filter(r => !r.isAvailable).length)
+const totalRooms = computed(() => rooms.value.length)
+const occupiedRooms = computed(() => rooms.value.filter(r => r.quantity === 0).length)
 const occupancyRate = computed(() => {
   if (totalRooms.value === 0) return 0
   return Math.round((occupiedRooms.value / totalRooms.value) * 100)
 })
 
 const totalRevenue = computed(() => {
-  return state.reservations
-    .filter(r => r.status !== 'Cancelled')
+  return reservations.value
+    .filter(r => r.status !== 'cancelled')
     .reduce((sum, r) => sum + r.totalPrice, 0)
 })
 
@@ -76,7 +129,7 @@ const openEditHotelForm = (hotel: Hotel) => {
     name: hotel.name, 
     city: hotel.city, 
     description: hotel.description, 
-    images: hotel.image ? [hotel.image] : [''], 
+    images: (hotel as any).images || [(hotel as any).image || ''], 
     rating: hotel.rating, 
     lat: hotel.lat, 
     lng: hotel.lng 
@@ -86,7 +139,7 @@ const openEditHotelForm = (hotel: Hotel) => {
   showRoomForm.value = false
 }
 
-const saveHotel = () => {
+const saveHotel = async () => {
   const error = validateHotelForm()
   if (error) {
     hotelFormError.value = error
@@ -96,34 +149,55 @@ const saveHotel = () => {
   const validImages = hotelForm.value.images.filter(img => img.trim() !== '')
   const mainImage = validImages.length > 0 ? validImages[0] : ''
 
-  if (isEditing.value && editingHotelId.value) {
-    updateHotel(editingHotelId.value, { ...hotelForm.value, image: mainImage })
+  const payload = {
+    ...hotelForm.value,
+    image: mainImage,
+    images: validImages
+  }
+
+  try {
+    if (isEditing.value && editingHotelId.value) {
+      await hotelService.updateHotel(editingHotelId.value, payload)
+    } else {
+      await hotelService.createHotel(payload)
+    }
+    await fetchAllData()
     showHotelForm.value = false
-  } else {
-    const newId = addHotel({ ...hotelForm.value, image: mainImage })
-    showHotelForm.value = false
+  } catch(e) {
+    hotelFormError.value = 'Error guardando hotel'
   }
 }
 
-const saveHotelAndStay = () => {
+const saveHotelAndStay = async () => {
   const error = validateHotelForm()
   if (error) {
     hotelFormError.value = error
-    return true // Return true to indicate error
+    return true
   }
 
   hotelFormError.value = ''
   const validImages = hotelForm.value.images.filter(img => img.trim() !== '')
   const mainImage = validImages.length > 0 ? validImages[0] : ''
   
-  if (!isEditing.value) {
-    const newId = addHotel({ ...hotelForm.value, image: mainImage })
-    editingHotelId.value = newId
-    isEditing.value = true
-  } else if (editingHotelId.value) {
-    updateHotel(editingHotelId.value, { ...hotelForm.value, image: mainImage })
+  const payload = {
+    ...hotelForm.value,
+    image: mainImage,
+    images: validImages
   }
-  return false
+
+  try {
+    if (!isEditing.value) {
+      const newHotel = await hotelService.createHotel(payload)
+      editingHotelId.value = newHotel.data!.id
+      isEditing.value = true
+    } else if (editingHotelId.value) {
+      await hotelService.updateHotel(editingHotelId.value, payload)
+    }
+    await fetchAllData()
+    return false
+  } catch(e) {
+    return true
+  }
 }
 
 // Hotel Image Management
@@ -171,7 +245,7 @@ const amenityCategories = [
 
 const roomForm = ref({
   name: '',
-  type: 'Double' as const,
+  type: 'Double' as 'Single' | 'Double' | 'Double/Double' | 'Suite',
   pricePerNight: 0,
   capacity: 2,
   images: [''],
@@ -202,8 +276,8 @@ const handleRoomAddClick = () => {
   }
 }
 
-const confirmSaveAndAddRoom = () => {
-  const hasError = saveHotelAndStay()
+const confirmSaveAndAddRoom = async () => {
+  const hasError = await saveHotelAndStay()
   if (!hasError) {
     showSaveConfirmModal.value = false
     openNewRoomForm()
@@ -226,27 +300,22 @@ const openEditRoomForm = (room: Room) => {
   editingRoomId.value = room.id
   roomFormError.value = ''
   
-  const ext = room.extendedDetails
   roomForm.value = { 
     name: room.name, 
-    type: room.type, 
-    pricePerNight: room.pricePerNight, 
+    type: room.type as 'Single' | 'Double' | 'Double/Double' | 'Suite', 
+    pricePerNight: room.price, 
     capacity: room.capacity, 
-    images: room.images && room.images.length > 0 ? [...room.images] : (room.image ? [room.image] : ['']), 
+    images: (room as any).images || [(room as any).image || ''], 
     description: room.description,
-    spaceInfo: ext?.spaceInfo || '',
-    roomBreakdown: ext?.roomBreakdown?.[0]?.beds || '',
-    highlightAmenities: ext?.highlightAmenities && ext.highlightAmenities.length > 0 
-      ? ext.highlightAmenities.map(a => ({ ...a }))
-      : [{ icon: 'bed', text: '' }],
+    spaceInfo: room.space_info || '',
+    roomBreakdown: room.bed_distribution || '',
+    highlightAmenities: room.highlighted_amenities?.map(a => ({ icon: a.icon || 'info', text: a.text })) || [{ icon: 'bed', text: '' }],
     categorizedAmenities: {}
   }
   
-  if (ext?.categorizedAmenities) {
-    for (const [key, val] of Object.entries(ext.categorizedAmenities)) {
-      if (val && val.length > 0) {
-        roomForm.value.categorizedAmenities[key] = val.join(', ')
-      }
+  if (room.amenity_categories) {
+    for (const cat of room.amenity_categories) {
+      roomForm.value.categorizedAmenities[cat.name] = cat.description
     }
   }
 
@@ -271,12 +340,11 @@ const removeHighlightAmenity = (index: number) => {
   roomForm.value.highlightAmenities.splice(index, 1)
 }
 
-const saveRoom = () => {
+const saveRoom = async () => {
   if (editingHotelId.value) {
     roomFormError.value = ''
     
-    // IS THE ROOM NUMBER ALREADY IN USE? (Flowchart validation)
-    const existingRooms = state.rooms.filter(r => r.hotelId === editingHotelId.value)
+    const existingRooms = rooms.value.filter(r => r.hotel_id === editingHotelId.value)
     const isDuplicate = existingRooms.some(r => 
       r.name.trim().toLowerCase() === roomForm.value.name.trim().toLowerCase() && 
       r.id !== editingRoomId.value
@@ -290,49 +358,55 @@ const saveRoom = () => {
     const validImages = roomForm.value.images.filter(img => img.trim() !== '')
     const mainImage = validImages.length > 0 ? validImages[0] : ''
 
-    const extendedDetails: RoomExtendedDetails = {
-      spaceInfo: roomForm.value.spaceInfo,
-      roomBreakdown: roomForm.value.roomBreakdown ? [{ name: 'Habitación 1', beds: roomForm.value.roomBreakdown }] : [],
-      highlightAmenities: roomForm.value.highlightAmenities.filter(a => a.text.trim() !== '').map(a => ({
-         icon: a.icon,
-         text: a.text.trim()
-      })),
-      categorizedAmenities: {}
-    }
+    const highlightAmenities = roomForm.value.highlightAmenities.filter(a => a.text.trim() !== '').map((a, i) => ({
+       id: '', room_id: '', icon: a.icon, text: a.text.trim(), display_order: i
+    }))
 
-    for (const cat of amenityCategories) {
+    const amenityCategories = []
+    for (const cat of ['Acceso para personas con discapacidad', 'Habitación', 'Baño', 'Entretenimiento', 'Alimentos y bebidas', 'Internet', 'Más']) {
       const val = roomForm.value.categorizedAmenities[cat]
       if (val !== undefined && val.trim() !== '') {
-        extendedDetails.categorizedAmenities![cat] = val.split(',').map(s => s.trim()).filter(Boolean)
+        amenityCategories.push({
+          id: '', room_id: '', name: cat, description: val, tier: 'basic', amenity_count: val.split(',').length
+        })
       }
     }
 
     const payload = {
         name: roomForm.value.name,
         type: roomForm.value.type,
-        pricePerNight: roomForm.value.pricePerNight,
+        price: roomForm.value.pricePerNight,
         capacity: roomForm.value.capacity,
         image: mainImage,
         images: validImages,
         description: roomForm.value.description,
-        extendedDetails,
-        isAvailable: true
+        space_info: roomForm.value.spaceInfo,
+        bed_distribution: roomForm.value.roomBreakdown,
+        highlighted_amenities: highlightAmenities,
+        amenity_categories: amenityCategories,
+        quantity: 1,
+        hotel_id: editingHotelId.value
     }
 
-    if (isEditingRoom.value && editingRoomId.value) {
-      updateRoom(editingRoomId.value, payload)
-    } else {
-      addRoom({ ...payload, hotelId: editingHotelId.value })
+    try {
+      if (isEditingRoom.value && editingRoomId.value) {
+        await roomService.updateRoom(editingRoomId.value, payload)
+      } else {
+        await roomService.createRoom(payload)
+      }
+      await fetchAllData()
+      showRoomForm.value = false
+      isEditingRoom.value = false
+      editingRoomId.value = null
+    } catch(e) {
+      roomFormError.value = 'Error al guardar habitacion'
     }
-    showRoomForm.value = false
-    isEditingRoom.value = false
-    editingRoomId.value = null
   }
 }
 
 const getHotelRooms = (hotelId: string | null) => {
   if (!hotelId) return []
-  return state.rooms.filter(r => r.hotelId === hotelId)
+  return rooms.value.filter(r => r.hotel_id === hotelId)
 }
 
 const showDeleteConfirm = ref(false)
@@ -348,13 +422,16 @@ const confirmDeleteHotel = (hotelId: string, hotelName: string) => {
   showDeleteConfirm.value = true
 }
 
-const proceedDelete = () => {
+const proceedDelete = async () => {
   if (itemToDelete.value) {
-    if (itemToDelete.value.type === 'room') {
-      deleteRoom(itemToDelete.value.id)
-    } else {
-      deleteHotel(itemToDelete.value.id)
-    }
+    try {
+      if (itemToDelete.value.type === 'room') {
+        await roomService.deleteRoom(itemToDelete.value.id)
+      } else {
+        await hotelService.deleteHotel(itemToDelete.value.id)
+      }
+      await fetchAllData()
+    } catch(e) {}
     showDeleteConfirm.value = false
     itemToDelete.value = null
   }
@@ -368,9 +445,9 @@ const cancelDelete = () => {
 // Search and Details
 const searchCity = ref('')
 const filteredHotels = computed(() => {
-  if (!searchCity.value) return state.hotels
+  if (!searchCity.value) return hotels.value
   const term = searchCity.value.toLowerCase()
-  return state.hotels.filter(h => h.city.toLowerCase().includes(term))
+  return hotels.value.filter(h => h.city.toLowerCase().includes(term))
 })
 
 const selectedHotel = ref<Hotel | null>(null)
@@ -387,12 +464,12 @@ const closeHotelDetails = () => {
 }
 
 const getHotelRoomsCount = (hotelId: string) => {
-  return state.rooms.filter(r => r.hotelId === hotelId).length
+  return rooms.value.filter(r => r.hotel_id === hotelId).length
 }
 
 const selectedHotelRooms = computed(() => {
   if (!selectedHotel.value) return []
-  return state.rooms.filter(r => r.hotelId === selectedHotel.value!.id)
+  return rooms.value.filter(r => r.hotel_id === selectedHotel.value!.id)
 })
 
 // Reservation Management
@@ -404,10 +481,10 @@ const reservationForm = ref({
   checkIn: '',
   checkOut: '',
   totalPrice: 0,
-  status: 'Pending' as 'Pending' | 'Confirmed' | 'Cancelled'
+  status: 'pending' as 'pending' | 'confirmed' | 'cancelled'
 })
 
-const openEditReservation = (res: Reservation) => {
+const openEditReservation = (res: MappedBooking) => {
   editingResId.value = res.id
   reservationForm.value = {
     clientName: res.clientName,
@@ -415,7 +492,7 @@ const openEditReservation = (res: Reservation) => {
     checkIn: res.checkIn,
     checkOut: res.checkOut,
     totalPrice: res.totalPrice,
-    status: res.status
+    status: res.status as 'pending' | 'confirmed' | 'cancelled'
   }
   showEditReservation.value = true
 }
@@ -428,19 +505,23 @@ const triggerError = (msg: string) => {
   showErrorModal.value = true
 }
 
-const saveReservation = () => {
+const saveReservation = async () => {
   if (editingResId.value) {
-    const res = state.reservations.find(r => r.id === editingResId.value)
-    if (reservationForm.value.status === 'Confirmed') {
-      const room = state.rooms.find(room => room.id === res?.roomId)
-      if (!room) {
+    const res = reservations.value.find(r => r.id === editingResId.value)
+    if (reservationForm.value.status === 'confirmed') {
+      if (res && res.isDeleted) {
         triggerError('No se puede confirmar esta reservación porque la habitación ya no existe.')
         return
       }
     }
-    updateReservation(editingResId.value, reservationForm.value)
-    showEditReservation.value = false
-    editingResId.value = null
+    try {
+      await bookingService.updateBookingStatus(editingResId.value, reservationForm.value.status)
+      await fetchAllData()
+      showEditReservation.value = false
+      editingResId.value = null
+    } catch(e) {
+      triggerError('Error al actualizar la reservación')
+    }
   }
 }
 
@@ -452,24 +533,30 @@ const handleCancelRes = (id: string) => {
   showCancelResConfirm.value = true
 }
 
-const confirmCancelResAction = () => {
+const confirmCancelResAction = async () => {
   if (resIdToCancel.value) {
-    cancelReservation(resIdToCancel.value)
+    try {
+      await bookingService.updateBookingStatus(resIdToCancel.value, 'cancelled')
+      await fetchAllData()
+    } catch(e) {}
     showCancelResConfirm.value = false
     resIdToCancel.value = null
   }
 }
 
-const handleConfirmRes = (id: string) => {
-  const res = state.reservations.find(r => r.id === id)
-  const room = state.rooms.find(room => room.id === res?.roomId)
-  
-  if (!room) {
+const handleConfirmRes = async (id: string) => {
+  const res = reservations.value.find(r => r.id === id)
+  if (res && res.isDeleted) {
     triggerError('No se puede confirmar esta reservación porque la habitación ya no existe.')
     return
   }
   
-  confirmReservation(id)
+  try {
+    await bookingService.updateBookingStatus(id, 'confirmed')
+    await fetchAllData()
+  } catch(e) {
+    triggerError('No se puede confirmar esta reservación.')
+  }
 }
 </script>
 
@@ -505,7 +592,7 @@ const handleConfirmRes = (id: string) => {
            <div class="dashboard-card">
              <div class="card-icon"><SvgIcon name="building" :size="40" /></div>
              <h3>Hoteles Activos</h3>
-             <p class="stat">{{ state.hotels.length }}</p>
+             <p class="stat">{{ hotels.length }}</p>
            </div>
         </div>
       </div>
@@ -552,7 +639,7 @@ const handleConfirmRes = (id: string) => {
               </div>
   <div class="input-group">
     <label class="input-label">Rutas de Imágenes</label>
-    <div v-for="(img, idx) in hotelForm.images" :key="idx" class="image-input-row">
+    <div v-for="(_, idx) in hotelForm.images" :key="idx" class="image-input-row">
       <input
         v-model="hotelForm.images[idx]"
         type="text"
@@ -614,7 +701,7 @@ const handleConfirmRes = (id: string) => {
                 <div v-for="room in getHotelRooms(editingHotelId)" :key="room.id" class="mini-room-card">
                   <div class="mini-room-info">
                     <span><strong>{{ room.name }}</strong> ({{ room.type }})</span>
-                    <span class="price-badge">${{ room.pricePerNight }}/noche</span>
+                    <span class="price-badge">${{ room.price }}/noche</span>
                   </div>
                   <div class="mini-room-actions">
                     <button type="button" class="btn-edit-room" @click="openEditRoomForm(room)" title="Editar Habitación">
@@ -662,7 +749,7 @@ const handleConfirmRes = (id: string) => {
                   </div>
                   <div class="input-group">
                     <label class="input-label">Rutas de Imágenes</label>
-                    <div v-for="(img, idx) in roomForm.images" :key="idx" class="image-input-row">
+                    <div v-for="(_, idx) in roomForm.images" :key="idx" class="image-input-row">
                       <input 
                         v-model="roomForm.images[idx]" 
                         type="text" 
@@ -742,7 +829,7 @@ const handleConfirmRes = (id: string) => {
           </div>
           <div class="details-content">
             <div class="details-image">
-              <img :src="selectedHotel.image" :alt="selectedHotel.name" />
+              <img :src="(selectedHotel as any).image" :alt="selectedHotel.name" />
             </div>
             <div class="details-info">
               <h4>{{ selectedHotel.name }}</h4>
@@ -756,13 +843,13 @@ const handleConfirmRes = (id: string) => {
                 <h5>Habitaciones Registradas</h5>
                 <div class="rooms-list">
                   <div v-for="room in selectedHotelRooms" :key="room.id" class="room-item">
-                    <img :src="room.image" :alt="room.name" class="room-item-img" />
+                    <img :src="(room as any).image" :alt="room.name" class="room-item-img" />
                     <div class="room-item-info">
                       <h6>{{ room.name }}</h6>
-                      <p class="room-meta">{{ room.type }} | Capacidad: {{ room.capacity }} pers. | <strong>${{ room.pricePerNight }}/noche</strong></p>
+                      <p class="room-meta">{{ room.type }} | Capacidad: {{ room.capacity }} pers. | <strong>${{ room.price }}/noche</strong></p>
                     </div>
-                    <span class="availability-badge" :class="room.isAvailable ? 'available' : 'occupied'">
-                      {{ room.isAvailable ? 'Disponible' : 'Ocupada' }}
+                    <span class="availability-badge" :class="room.quantity > 0 ? 'available' : 'occupied'">
+                      {{ room.quantity > 0 ? 'Disponible' : 'Ocupada' }}
                     </span>
                   </div>
                 </div>
@@ -806,7 +893,7 @@ const handleConfirmRes = (id: string) => {
         
         <ReservationList 
           v-if="!showEditReservation"
-          :reservations="state.reservations"
+          :reservations="reservations"
           :show-actions="true"
           @cancel="handleCancelRes"
           @confirm="handleConfirmRes"
@@ -816,7 +903,7 @@ const handleConfirmRes = (id: string) => {
         <div v-if="showEditReservation" class="form-card animate-fade-in">
           <h3>Editar Reservación {{ editingResId }}</h3>
           
-          <div v-if="editingResId && !state.rooms.find(room => room.id === state.reservations.find(r => r.id === editingResId)?.roomId)" 
+          <div v-if="editingResId && reservations.find(r => r.id === editingResId)?.isDeleted" 
                class="form-error-alert animate-fade-in" style="margin-bottom: 20px; background-color: #fff1f2; border-color: #fda4af; color: #be123c;">
             <SvgIcon name="info" :size="18" />
             <span>Atención: La habitación original ha sido eliminada. No es posible confirmar esta reservación.</span>

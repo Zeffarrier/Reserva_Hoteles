@@ -1,11 +1,65 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useHotelStore, type Hotel, type Reservation } from '../store/hotelStore'
-import ReservationList from '../components/ReservationList.vue'
+import { ref, computed, onMounted } from 'vue'
+import ReservationList, { type MappedBooking } from '../components/ReservationList.vue'
 import CustomDialog from '../components/CustomDialog.vue'
 import SvgIcon from '../components/SvgIcon.vue'
+import { bookingService } from '../services/bookingService'
+import { hotelService } from '../services/hotelService'
+import { roomService } from '../services/roomService'
+import type { Hotel, Room } from '../types/models'
 
-const { state, confirmReservation, cancelReservation, updateReservation } = useHotelStore()
+const hotels = ref<Hotel[]>([])
+const rooms = ref<Room[]>([])
+const reservations = ref<MappedBooking[]>([])
+const isLoading = ref(true)
+
+const fetchAllData = async () => {
+  isLoading.value = true
+  try {
+    const [hRes, bRes] = await Promise.all([
+      hotelService.getHotels(),
+      bookingService.getAllBookings()
+    ])
+    hotels.value = hRes || []
+    
+    // fetch rooms for all hotels
+    const allRooms = []
+    for (const hotel of hotels.value) {
+      const hRooms = await roomService.getRoomsByHotel(hotel.id)
+      allRooms.push(...(hRooms || []))
+    }
+    rooms.value = allRooms
+
+    const mappedBookings: MappedBooking[] = []
+    for (const b of (bRes || [])) {
+      const hotel = hotels.value.find(h => h.id === b.hotel_id)
+      const room = rooms.value.find(r => r.id === b.room_id)
+      
+      mappedBookings.push({
+        id: b.id,
+        clientName: b.guest_name || '',
+        clientEmail: b.guest_email || '',
+        hotelName: hotel ? hotel.name : 'Hotel Desconocido',
+        roomName: room ? room.name : 'Habitación Eliminada',
+        checkIn: b.start_date,
+        checkOut: b.end_date,
+        totalPrice: b.total_price,
+        status: b.status,
+        isDeleted: !room,
+        raw: b
+      })
+    }
+    reservations.value = mappedBookings
+  } catch (error) {
+    console.error("Error fetching receptionist data", error)
+  } finally {
+    isLoading.value = false
+  }
+}
+
+onMounted(() => {
+  fetchAllData()
+})
 
 // Generic Dialog State
 const dialog = ref({
@@ -36,18 +90,22 @@ const triggerDialog = (title: string, message: string, onConfirm = () => {}, isD
 }
 
 const handleConfirm = (id: string) => {
-  const res = state.reservations.find(r => r.id === id)
-  if (res) {
-    const roomExists = state.rooms.some(r => r.id === res.roomId)
-    if (!roomExists) {
-      triggerDialog('Error de Validación', 'No puedes aprobar esta reserva. La habitación asociada ya no existe o fue eliminada del sistema.', () => {}, true, false, 'Entendido')
-      return
-    }
+  const res = reservations.value.find(r => r.id === id)
+  if (res && res.isDeleted) {
+    triggerDialog('Error de Validación', 'No puedes aprobar esta reserva. La habitación asociada ya no existe o fue eliminada del sistema.', () => {}, true, false, 'Entendido')
+    return
   }
   triggerDialog(
     'Confirmar Reserva',
     `¿Estás seguro de confirmar la reserva <strong>${id}</strong>?`,
-    () => confirmReservation(id)
+    async () => {
+      try {
+        await bookingService.updateBookingStatus(id, 'confirmed')
+        fetchAllData()
+      } catch (e) {
+        triggerError('No se pudo confirmar la reserva.')
+      }
+    }
   )
 }
 
@@ -55,7 +113,14 @@ const handleCancel = (id: string) => {
   triggerDialog(
     'Cancelar Reserva',
     `ATENCIÓN: ¿Estás seguro de cancelar la reserva <strong>${id}</strong>? Esta acción liberará la habitación.`,
-    () => cancelReservation(id),
+    async () => {
+      try {
+        await bookingService.updateBookingStatus(id, 'cancelled')
+        fetchAllData()
+      } catch (e) {
+        triggerError('No se pudo cancelar la reserva.')
+      }
+    },
     true
   )
 }
@@ -69,7 +134,7 @@ const reservationForm = ref({
   checkIn: '',
   checkOut: '',
   totalPrice: 0,
-  status: 'Pending' as 'Pending' | 'Confirmed' | 'Cancelled'
+  status: 'pending' as 'pending' | 'confirmed' | 'cancelled'
 })
 
 const showErrorModal = ref(false)
@@ -80,7 +145,7 @@ const triggerError = (msg: string) => {
   showErrorModal.value = true
 }
 
-const openEditReservation = (res: Reservation) => {
+const openEditReservation = (res: MappedBooking) => {
   editingResId.value = res.id
   reservationForm.value = {
     clientName: res.clientName,
@@ -88,24 +153,29 @@ const openEditReservation = (res: Reservation) => {
     checkIn: res.checkIn,
     checkOut: res.checkOut,
     totalPrice: res.totalPrice,
-    status: res.status
+    status: res.status as 'pending' | 'confirmed' | 'cancelled'
   }
   showEditReservation.value = true
 }
 
-const saveReservation = () => {
+const saveReservation = async () => {
   if (editingResId.value) {
-    const res = state.reservations.find(r => r.id === editingResId.value)
-    if (reservationForm.value.status === 'Confirmed') {
-      const room = state.rooms.find(room => room.id === res?.roomId)
-      if (!room) {
+    const res = reservations.value.find(r => r.id === editingResId.value)
+    if (reservationForm.value.status === 'confirmed') {
+      if (res && res.isDeleted) {
         triggerError('No se puede confirmar esta reservación porque la habitación ya no existe.')
         return
       }
     }
-    updateReservation(editingResId.value, reservationForm.value)
-    showEditReservation.value = false
-    editingResId.value = null
+    
+    try {
+      await bookingService.updateBookingStatus(editingResId.value, reservationForm.value.status)
+      fetchAllData()
+      showEditReservation.value = false
+      editingResId.value = null
+    } catch (e) {
+      triggerError('Error al actualizar la reservación.')
+    }
   }
 }
 
@@ -114,9 +184,9 @@ const currentTab = ref<'reservations' | 'hotels'>('reservations')
 
 const searchCity = ref('')
 const filteredHotels = computed(() => {
-  if (!searchCity.value) return state.hotels
+  if (!searchCity.value) return hotels.value
   const term = searchCity.value.toLowerCase()
-  return state.hotels.filter(h => h.city.toLowerCase().includes(term))
+  return hotels.value.filter(h => h.city.toLowerCase().includes(term))
 })
 
 const selectedHotel = ref<Hotel | null>(null)
@@ -133,12 +203,12 @@ const closeHotelDetails = () => {
 }
 
 const getHotelRoomsCount = (hotelId: string) => {
-  return state.rooms.filter(r => r.hotelId === hotelId).length
+  return rooms.value.filter(r => r.hotel_id === hotelId).length
 }
 
 const selectedHotelRooms = computed(() => {
   if (!selectedHotel.value) return []
-  return state.rooms.filter(r => r.hotelId === selectedHotel.value!.id)
+  return rooms.value.filter(r => r.hotel_id === selectedHotel.value!.id)
 })
 </script>
 
@@ -163,7 +233,7 @@ const selectedHotelRooms = computed(() => {
 
       <ReservationList
         v-if="!showEditReservation"
-        :reservations="state.reservations"
+        :reservations="reservations"
         :show-actions="true"
         @confirm="handleConfirm"
         @cancel="handleCancel"
@@ -173,7 +243,7 @@ const selectedHotelRooms = computed(() => {
       <div v-if="showEditReservation" class="form-card animate-fade-in">
         <h3>Editar Reservación {{ editingResId }}</h3>
 
-        <div v-if="editingResId && !state.rooms.find(room => room.id === state.reservations.find(r => r.id === editingResId)?.roomId)"
+        <div v-if="editingResId && reservations.find(r => r.id === editingResId)?.isDeleted"
         class="form-error-alert animate-fade-in" style="margin-bottom: 20px; background-color: #fff1f2; border-color: #fda4af; color: #be123c;">
           <SvgIcon name="info" :size="18" />
           <span>Atención: La habitación original ha sido eliminada. No es posible confirmar esta reservación.</span>
@@ -224,7 +294,7 @@ const selectedHotelRooms = computed(() => {
     <div v-if="currentTab === 'hotels'" class="animate-fade-in">
       <div class="section-header">
         <h2>Gestión de Hoteles</h2>
-        <button class="btn btn-primary" @click="openNewHotelForm" style="display:none;">+ Nuevo Hotel</button>
+
       </div>
 
       <!-- Search by city -->
@@ -248,7 +318,8 @@ const selectedHotelRooms = computed(() => {
         </div>
         <div class="details-content">
           <div class="details-image">
-            <img :src="selectedHotel.image" :alt="selectedHotel.name" />
+            <!-- Mocking image since API Hotel doesn't have image property directly, or we cast -->
+            <img :src="(selectedHotel as any).image || ''" :alt="selectedHotel.name" />
           </div>
           <div class="details-info">
             <h4>{{ selectedHotel.name }}</h4>
@@ -262,13 +333,13 @@ const selectedHotelRooms = computed(() => {
               <h5>Habitaciones Registradas</h5>
               <div class="rooms-list">
                 <div v-for="room in selectedHotelRooms" :key="room.id" class="room-item">
-                  <img :src="room.image" :alt="room.name" class="room-item-img" />
+                  <img :src="(room as any).image || ''" :alt="room.name" class="room-item-img" />
                   <div class="room-item-info">
                     <h6>{{ room.name }}</h6>
-                    <p class="room-meta">{{ room.type }} | Capacidad: {{ room.capacity }} pers. | <strong>${{ room.pricePerNight }}/noche</strong></p>
+                    <p class="room-meta">{{ room.type }} | Capacidad: {{ room.capacity }} pers. | <strong>${{ room.price }}/noche</strong></p>
                   </div>
-                  <span class="availability-badge" :class="room.isAvailable ? 'available' : 'occupied'">
-                    {{ room.isAvailable ? 'Disponible' : 'Ocupada' }}
+                  <span class="availability-badge" :class="room.quantity > 0 ? 'available' : 'occupied'">
+                    {{ room.quantity > 0 ? 'Disponible' : 'Ocupada' }}
                   </span>
                 </div>
               </div>

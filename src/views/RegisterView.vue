@@ -1,22 +1,25 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useHotelStore } from '../store/hotelStore'
+import { useAuthStore } from '../store/authStore'
+import { authService } from '../services/authService'
 
 const router = useRouter()
-const { registerUser } = useHotelStore()
+const { setAuth } = useAuthStore()
 
 const name = ref('')
 const email = ref('')
 const password = ref('')
 const errorMsg = ref('')
 
-const handleRegister = () => {
+const handleRegister = async () => {
   errorMsg.value = ''
-  if (registerUser({ name: name.value, email: email.value, password: password.value })) {
+  try {
+    const res = await authService.register(name.value, email.value, password.value)
+    setAuth(res.user, res.token)
     router.push('/')
-  } else {
-    errorMsg.value = 'Este correo ya está registrado.'
+  } catch (error: any) {
+    errorMsg.value = error.message || 'Error al registrar la cuenta. Este correo podría ya estar registrado.'
   }
 }
 </script>

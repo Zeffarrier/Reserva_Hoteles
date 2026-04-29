@@ -1,9 +1,14 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useHotelStore } from '../store/hotelStore'
-import ReservationList from '../components/ReservationList.vue'
+import { useAuthStore } from '../store/authStore'
+import { authService } from '../services/authService'
+import { bookingService } from '../services/bookingService'
 
-const { state, updateProfile } = useHotelStore()
+import { hotelService } from '../services/hotelService'
+import { roomService } from '../services/roomService'
+import ReservationList, { type MappedBooking } from '../components/ReservationList.vue'
+
+const { state, setAuth } = useAuthStore()
 
 const name = ref('')
 const email = ref('')
@@ -12,32 +17,80 @@ const password = ref('')
 const successMsg = ref('')
 const errorMsg = ref('')
 
+const myReservations = ref<MappedBooking[]>([])
+
+const fetchBookings = async () => {
+  if (state.currentUser?.id) {
+    try {
+      const bookings = await bookingService.getUserBookings(state.currentUser.id)
+      const mappedBookings: MappedBooking[] = []
+      
+      for (const b of (bookings || [])) {
+        let hotelName = 'Hotel Desconocido'
+        let roomName = 'Habitación Eliminada'
+        let isDeleted = true
+        
+        try {
+          const hotel = await hotelService.getHotel(b.hotel_id)
+          if (hotel) hotelName = hotel.name
+          
+          const rooms = await roomService.getRoomsByHotel(b.hotel_id)
+          const room = rooms?.find(r => r.id === b.room_id)
+          if (room) {
+            roomName = room.name
+            isDeleted = false
+          }
+        } catch (e) {}
+
+        mappedBookings.push({
+          id: b.id,
+          clientName: b.guest_name || '',
+          clientEmail: b.guest_email || '',
+          hotelName,
+          roomName,
+          checkIn: b.start_date,
+          checkOut: b.end_date,
+          totalPrice: b.total_price,
+          status: b.status,
+          isDeleted,
+          raw: b
+        })
+      }
+      
+      myReservations.value = mappedBookings
+    } catch (e) {
+      console.error('Error fetching bookings', e)
+    }
+  }
+}
+
 onMounted(() => {
   if (state.currentUser) {
     name.value = state.currentUser.name
     email.value = state.currentUser.email
+    fetchBookings()
   }
 })
 
-const handleUpdate = () => {
+const handleUpdate = async () => {
   successMsg.value = ''
   errorMsg.value = ''
   
-  const payload: any = { name: name.value, email: email.value }
-  if (password.value) payload.password = password.value
-
-  if (updateProfile(payload)) {
+  try {
+    const res = await authService.updateProfile(state.currentUser!.id, { 
+      name: name.value, 
+      email: email.value, 
+      password: password.value 
+    })
+    if (state.token) {
+      setAuth(res.user, state.token)
+    }
     successMsg.value = 'Perfil actualizado correctamente.'
     password.value = ''
-  } else {
-    errorMsg.value = 'No se pudo actualizar. Es posible que el correo ya esté en uso.'
+  } catch (error: any) {
+    errorMsg.value = error.message || 'No se pudo actualizar. Es posible que el correo ya esté en uso.'
   }
 }
-
-// Filtrar las reservas del usuario activo
-const myReservations = ref(
-  state.reservations.filter(r => r.clientId === state.currentUser?.id)
-)
 
 </script>
 

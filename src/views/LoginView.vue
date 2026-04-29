@@ -1,25 +1,31 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useHotelStore } from '../store/hotelStore'
+import { useAuthStore } from '../store/authStore'
+import { authService } from '../services/authService'
 
 const router = useRouter()
-const { login, state } = useHotelStore()
+const { setAuth } = useAuthStore()
 
 const email = ref('')
 const password = ref('')
 const errorMsg = ref('')
 
-const handleLogin = () => {
+const handleLogin = async () => {
   errorMsg.value = ''
-  if (login(email.value, password.value)) {
-    if (state.currentUser?.role === 'admin') {
+  try {
+    const res = await authService.login(email.value, password.value)
+    setAuth(res.user, res.token)
+    
+    if (res.user.role === 'admin') {
       router.push('/admin')
+    } else if (res.user.role === 'receptionist') {
+      router.push('/receptionist')
     } else {
       router.push('/')
     }
-  } else {
-    errorMsg.value = 'Credenciales incorrectas. Inténtalo de nuevo.'
+  } catch (error: any) {
+    errorMsg.value = error.message || 'Credenciales incorrectas. Inténtalo de nuevo.'
   }
 }
 </script>

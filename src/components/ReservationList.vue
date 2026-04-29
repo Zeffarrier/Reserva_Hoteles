@@ -1,41 +1,39 @@
 <script setup lang="ts">
-import type { Reservation } from '../store/hotelStore'
-import { useHotelStore } from '../store/hotelStore'
+export interface MappedBooking {
+  id: string;
+  clientName: string;
+  clientEmail: string;
+  hotelName: string;
+  roomName: string;
+  checkIn: string;
+  checkOut: string;
+  totalPrice: number;
+  status: string;
+  isDeleted: boolean;
+  raw: any;
+}
 
 defineProps<{
-  reservations: Reservation[]
+  reservations: MappedBooking[]
   showActions: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'cancel', id: string): void
   (e: 'confirm', id: string): void
-  (e: 'edit', reservation: Reservation): void
+  (e: 'edit', reservation: MappedBooking): void
 }>()
 
 const statusClass = (status: string) => {
-  if (status === 'Confirmed') return 'badge-success'
-  if (status === 'Pending') return 'badge-warning'
+  if (status === 'confirmed') return 'badge-success'
+  if (status === 'pending') return 'badge-warning'
   return 'badge-danger'
 }
 
 const statusText = (status: string) => {
-  if (status === 'Confirmed') return 'Confirmada'
-  if (status === 'Pending') return 'Pendiente'
+  if (status === 'confirmed') return 'Confirmada'
+  if (status === 'pending') return 'Pendiente'
   return 'Cancelada'
-}
-
-const { state } = useHotelStore()
-
-const getRoomDetails = (roomId: string) => {
-  const room = state.rooms.find(r => r.id === roomId)
-  if (!room) return { roomName: 'Habitación Eliminada', hotelName: 'Hotel Desconocido', isDeleted: true }
-  const hotel = state.hotels.find(h => h.id === room.hotelId)
-  return { 
-    roomName: room.name, 
-    hotelName: hotel ? hotel.name : 'Hotel Desconocido',
-    isDeleted: false
-  }
 }
 </script>
 
@@ -69,8 +67,8 @@ const getRoomDetails = (roomId: string) => {
             </td>
             <td>
               <div class="client-info">
-                <span class="client-name" :class="{ 'text-danger': getRoomDetails(res.roomId).isDeleted }">{{ getRoomDetails(res.roomId).hotelName }}</span>
-                <span class="client-email" :class="{ 'text-danger': getRoomDetails(res.roomId).isDeleted }">{{ getRoomDetails(res.roomId).roomName }}</span>
+                <span class="client-name" :class="{ 'text-danger': res.isDeleted }">{{ res.hotelName }}</span>
+                <span class="client-email" :class="{ 'text-danger': res.isDeleted }">{{ res.roomName }}</span>
               </div>
             </td>
             <td>
@@ -95,17 +93,17 @@ const getRoomDetails = (roomId: string) => {
                   ✎
                 </button>
                 <button 
-                  v-if="res.status === 'Pending'" 
+                  v-if="res.status === 'pending'" 
                   class="btn-icon confirm" 
                   @click="emit('confirm', res.id)"
-                  :title="getRoomDetails(res.roomId).isDeleted ? 'No se puede confirmar: Habitación eliminada' : 'Confirmar'"
-                  :disabled="getRoomDetails(res.roomId).isDeleted"
-                  :style="getRoomDetails(res.roomId).isDeleted ? 'opacity: 0.5; cursor: not-allowed;' : ''"
+                  :title="res.isDeleted ? 'No se puede confirmar: Habitación eliminada' : 'Confirmar'"
+                  :disabled="res.isDeleted"
+                  :style="res.isDeleted ? 'opacity: 0.5; cursor: not-allowed;' : ''"
                 >
                   ✓
                 </button>
                 <button 
-                  v-if="res.status !== 'Cancelled'" 
+                  v-if="res.status !== 'cancelled'" 
                   class="btn-icon cancel" 
                   @click="emit('cancel', res.id)"
                   title="Cancelar"

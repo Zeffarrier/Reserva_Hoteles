@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import type { Room } from '../store/hotelStore'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import type { Room } from '../types/models'
 import SvgIcon from './SvgIcon.vue'
 
 const props = defineProps<{
@@ -13,26 +13,27 @@ const emit = defineEmits<{
 }>()
 
 const currentImageIndex = ref(0)
-const hasMultipleImages = computed(() => props.room.images && props.room.images.length > 1)
+const roomImages = computed(() => (props.room as any).images || [])
+const hasMultipleImages = computed(() => roomImages.value.length > 1)
 
 const currentImage = computed(() => {
-  if (hasMultipleImages.value && props.room.images) {
-    return props.room.images[currentImageIndex.value]
+  if (hasMultipleImages.value) {
+    return roomImages.value[currentImageIndex.value]
   }
-  return props.room.image
+  return (props.room as any).image || 'https://placehold.co/600x400?text=Habitacion'
 })
 
 const nextImage = () => {
-  if (!props.room.images) return
-  currentImageIndex.value = (currentImageIndex.value + 1) % props.room.images.length
+  if (!hasMultipleImages.value) return
+  currentImageIndex.value = (currentImageIndex.value + 1) % roomImages.value.length
 }
 
 const prevImage = () => {
-  if (!props.room.images) return
-  currentImageIndex.value = (currentImageIndex.value - 1 + props.room.images.length) % props.room.images.length
+  if (!hasMultipleImages.value) return
+  currentImageIndex.value = (currentImageIndex.value - 1 + roomImages.value.length) % roomImages.value.length
 }
 
-const discountedPrice = computed(() => Math.floor(props.room.pricePerNight * 0.85))
+const isAvailable = computed(() => props.room.quantity > 0)
 
 const isClosing = ref(false)
 
@@ -41,9 +42,20 @@ const handleClose = () => {
   setTimeout(() => {
     emit('close')
   }, 250)
-} // Fake discount logic for UI
+}
 
-import { onMounted, onUnmounted } from 'vue'
+const spaceInfo = computed(() => props.room.space_info)
+const roomBreakdown = computed(() => [{ name: 'Camas', beds: props.room.bed_distribution }])
+const highlightAmenities = computed(() => props.room.highlighted_amenities || [])
+const categorizedAmenities = computed(() => {
+  const cats: Record<string, string[]> = {}
+  if (props.room.amenity_categories) {
+    props.room.amenity_categories.forEach(c => {
+      cats[c.name] = [c.description]
+    })
+  }
+  return Object.keys(cats).length > 0 ? cats : null
+})
 
 onMounted(() => {
   document.body.style.overflow = 'hidden'
@@ -82,9 +94,9 @@ onUnmounted(() => {
           <h1 class="room-title">{{ room.name }}</h1>
 
           <!-- Highlight Amenities -->
-          <div v-if="room.extendedDetails?.highlightAmenities" class="highlights-grid">
-            <div v-for="(highlight, idx) in room.extendedDetails.highlightAmenities" :key="idx" class="highlight-item">
-              <span class="highlight-icon"><SvgIcon :name="highlight.icon" :size="28" /></span>
+          <div v-if="highlightAmenities.length > 0" class="highlights-grid">
+            <div v-for="(highlight, idx) in highlightAmenities" :key="idx" class="highlight-item">
+              <span class="highlight-icon"><SvgIcon :name="highlight.icon" :size="28" v-if="highlight.icon" /></span>
               <span class="highlight-text">{{ highlight.text }}</span>
             </div>
           </div>
@@ -92,10 +104,10 @@ onUnmounted(() => {
           <!-- Space Info -->
           <div class="section-block">
             <h3>Información sobre el espacio</h3>
-            <p v-if="room.extendedDetails?.spaceInfo" class="space-summary">{{ room.extendedDetails.spaceInfo }}</p>
+            <p v-if="spaceInfo" class="space-summary">{{ spaceInfo }}</p>
             
-            <div v-if="room.extendedDetails?.roomBreakdown" class="room-breakdown">
-              <div v-for="(breakdown, idx) in room.extendedDetails.roomBreakdown" :key="idx" class="breakdown-item">
+            <div v-if="roomBreakdown.length > 0 && roomBreakdown[0].beds" class="room-breakdown">
+              <div v-for="(breakdown, idx) in roomBreakdown" :key="idx" class="breakdown-item">
                 <h4 class="breakdown-name">{{ breakdown.name }}</h4>
                 <div class="bed-icon"><SvgIcon name="bed" :size="24" /></div>
                 <p class="breakdown-beds">{{ breakdown.beds }}</p>
@@ -104,10 +116,10 @@ onUnmounted(() => {
           </div>
 
           <!-- Categorized Amenities -->
-          <div class="section-block">
+          <div class="section-block" v-if="categorizedAmenities">
             <h3>Amenidades en la unidad</h3>
-            <div v-if="room.extendedDetails?.categorizedAmenities" class="amenities-masonry">
-              <div v-for="(items, category) in room.extendedDetails.categorizedAmenities" :key="category" class="amenity-category">
+            <div class="amenities-masonry">
+              <div v-for="(items, category) in categorizedAmenities" :key="category" class="amenity-category">
                 <h4>{{ category }}</h4>
                 <ul class="amenity-list">
                   <li v-for="(item, idx) in items" :key="idx">• {{ item }}</li>
@@ -124,17 +136,17 @@ onUnmounted(() => {
         <div class="footer-info">
           <h3>Opciones de la unidad</h3>
           <p class="refund-info">100% reembolsable <span>ⓘ</span></p>
-          <p class="availability-text">{{ room.isAvailable ? '1 habitación disponible' : 'Agotada' }}</p>
+          <p class="availability-text">{{ isAvailable ? `${room.quantity} habitación(es) disponible(s)` : 'Agotada' }}</p>
         </div>
         
         <div class="footer-action">
           <div class="price-box">
             <div class="discount-badge">¡Oferta especial!</div>
-            <div class="price-per-night">${{ room.pricePerNight }} por noche</div>
-            <div class="price-total"><span class="strike">${{ room.pricePerNight + 50 }}</span> <strong>${{ room.pricePerNight }} en total</strong></div>
+            <div class="price-per-night">${{ room.price }} por noche</div>
+            <div class="price-total"><span class="strike">${{ room.price + 50 }}</span> <strong>${{ room.price }} en total</strong></div>
             <div class="taxes-text">Total con impuestos y cargos</div>
           </div>
-          <button class="btn-reservar" :disabled="!room.isAvailable" @click="emit('book', room.id)">
+          <button class="btn-reservar" :disabled="!isAvailable" @click="emit('book', room.id)">
             Reservar
           </button>
         </div>

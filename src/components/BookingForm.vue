@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import type { Room } from '../store/hotelStore'
-import { useHotelStore } from '../store/hotelStore'
+import type { Room } from '../types/models'
 import DateRangePicker from './DateRangePicker.vue'
 import SvgIcon from './SvgIcon.vue'
 import { loadStripe } from '@stripe/stripe-js'
-import type { Stripe, StripeElements, StripeCardElement } from '@stripe/stripe-js'
+import type { Stripe, StripeElements } from '@stripe/stripe-js'
 
 const props = defineProps<{
   room: Room
@@ -16,16 +15,14 @@ const emit = defineEmits<{
   (e: 'cancel'): void
 }>()
 
-const { searchDates } = useHotelStore()
-
 const clientName = ref('')
 const clientEmail = ref('')
 const clientPhone = ref('')
 const showDatePicker = ref(false)
 const datePickerRef = ref<HTMLElement | null>(null)
 const dateRange = ref<{ start: Date | null, end: Date | null }>({
-  start: searchDates.start ? new Date(searchDates.start) : null,
-  end: searchDates.end ? new Date(searchDates.end) : null
+  start: null,
+  end: null
 })
 
 const cardNumberRef = ref<HTMLElement | null>(null)
@@ -146,7 +143,7 @@ const totalDays = computed(() => {
 })
 
 const totalPrice = computed(() => {
-  return totalDays.value * props.room.pricePerNight
+  return totalDays.value * props.room.price
 })
 
 const isValid = computed(() => {
@@ -292,7 +289,7 @@ const handleSubmit = () => {
             <span>Total a Pagar:</span>
             <span>${{ totalPrice }}</span>
           </div>
-          <div class="taxes-text">Estancia: {{ totalDays }} noches x ${{ room.pricePerNight }}</div>
+          <div class="taxes-text">Estancia: {{ totalDays }} noches x ${{ room.price }}</div>
         </div>
       </div>
 

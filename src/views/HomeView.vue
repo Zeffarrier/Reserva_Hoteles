@@ -1,23 +1,40 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { useHotelStore } from '../store/hotelStore'
+
+import { hotelService } from '../services/hotelService'
+import type { Hotel } from '../types/models'
 import HotelCard from '../components/HotelCard.vue'
 import DateRangePicker from '../components/DateRangePicker.vue'
 import GuestSelector from '../components/GuestSelector.vue'
 import SvgIcon from '../components/SvgIcon.vue'
 import { useRouter } from 'vue-router'
 
-const { state, getHotelsByCity, searchDates } = useHotelStore()
 const searchCity = ref('')
 const showDatePicker = ref(false)
 const showGuestPicker = ref(false)
-const selectedDateRange = ref<{ start: Date | null, end: Date | null }>({
-  start: searchDates.start,
-  end: searchDates.end
-})
+
+// We can keep these in local state for the Home search, 
+// they can be passed to HotelDetailView via query params later if needed.
+const searchDates = ref<{ start: Date | null, end: Date | null }>({ start: null, end: null })
+const selectedDateRange = ref<{ start: Date | null, end: Date | null }>({ start: null, end: null })
 const guestsState = ref({ adults: 2, children: 0, rooms: 1, pets: false })
+
 const searchBarRef = ref<HTMLElement | null>(null)
 const router = useRouter()
+
+const hotels = ref<Hotel[]>([])
+const isLoading = ref(true)
+
+const fetchHotels = async () => {
+  try {
+    isLoading.value = true
+    hotels.value = await hotelService.getHotels()
+  } catch (e) {
+    console.error('Error fetching hotels:', e)
+  } finally {
+    isLoading.value = false
+  }
+}
 
 const openMap = () => {
   router.push('/mapa')
@@ -32,6 +49,7 @@ const handleClickOutside = (event: MouseEvent) => {
 
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
+  fetchHotels()
 })
 
 onUnmounted(() => {
@@ -48,7 +66,6 @@ const toggleGuestPicker = () => {
   if (showGuestPicker.value) showDatePicker.value = false
 }
 
-
 const formatGuestsText = computed(() => {
   const { adults, children, rooms } = guestsState.value
   const people = adults + children
@@ -64,14 +81,13 @@ const formatDateRange = computed(() => {
   return `${start} — ${end}`
 })
 
-// Sincronizar fechas con el store global
 watch(selectedDateRange, (newDates) => {
-  searchDates.start = newDates.start
-  searchDates.end = newDates.end
+  searchDates.value.start = newDates.start
+  searchDates.value.end = newDates.end
 }, { deep: true })
 
 const filteredHotels = computed(() => {
-  let result = state.hotels
+  let result = hotels.value
 
   // 1. Filtrar por ciudad
   if (searchCity.value.trim()) {
@@ -79,40 +95,10 @@ const filteredHotels = computed(() => {
     result = result.filter(h => h.city.toLowerCase().includes(lower))
   }
 
-  // 2. Filtrar por capacidad (Huéspedes)
-  const totalGuests = guestsState.value.adults + guestsState.value.children
-
-  // 3. Evaluar disponibilidad de habitaciones
-  result = result.filter(hotel => {
-    const hotelRooms = state.rooms.filter(r => r.hotelId === hotel.id)
-    
-    // El hotel pasa el filtro si tiene AL MENOS UNA habitación disponible
-    return hotelRooms.some(room => {
-      // Verificación base: capacidad suficiente y no estar bloqueada manualmente
-      let isRoomAvailable = room.isAvailable && room.capacity >= totalGuests
-
-      // Verificación de fechas: si el usuario seleccionó un rango, validamos contra reservas existentes
-      if (isRoomAvailable && selectedDateRange.value.start && selectedDateRange.value.end) {
-        const searchStart = selectedDateRange.value.start.getTime()
-        const searchEnd = selectedDateRange.value.end.getTime()
-        
-        const hasOverlap = state.reservations.some(res => {
-          if (res.roomId !== room.id || res.status === 'Cancelled') return false
-          const resStart = new Date(res.checkIn).getTime()
-          const resEnd = new Date(res.checkOut).getTime()
-          
-          // Hay solapamiento si la fecha de entrada buscada es menor a la salida reservada
-          // Y la fecha de salida buscada es mayor a la entrada reservada.
-          return searchStart < resEnd && searchEnd > resStart
-        })
-        
-        if (hasOverlap) isRoomAvailable = false
-      }
-
-      return isRoomAvailable
-    })
-  })
-
+  // To implement advanced filtering by available rooms and capacity, 
+  // we would ideally query the backend search endpoint, 
+  // as fetching all rooms for all hotels is inefficient on the client.
+  
   return result
 })
 </script>

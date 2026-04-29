@@ -1,16 +1,21 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useHotelStore } from '../store/hotelStore'
+import { hotelService } from '../services/hotelService'
 import GoogleMap from '../components/GoogleMap.vue'
 import SvgIcon from '../components/SvgIcon.vue'
-import type { Hotel } from '../store/hotelStore'
+import type { Hotel } from '../types/models'
 
 const router = useRouter()
-const { state } = useHotelStore()
-
-const hotels = computed(() => state.hotels)
+const hotels = ref<Hotel[]>([])
 const selectedHotel = ref<Hotel | null>(null)
+
+onMounted(async () => {
+  try {
+    const res = await hotelService.getHotels()
+    hotels.value = res || []
+  } catch(e) {}
+})
 
 const goBack = () => {
   router.push('/')
@@ -46,7 +51,7 @@ const viewRooms = () => {
           <button class="close-card-btn" @click="selectedHotel = null">
             <SvgIcon name="close" :size="20" />
           </button>
-          <img :src="selectedHotel.image" :alt="selectedHotel.name" class="hotel-card-img" />
+          <img :src="(selectedHotel as any).image" :alt="selectedHotel.name" class="hotel-card-img" />
           <div class="hotel-card-content">
             <div class="hotel-meta">
               <span class="hotel-city"><SvgIcon name="location" :size="14" /> {{ selectedHotel.city }}</span>

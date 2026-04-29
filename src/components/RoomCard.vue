@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import type { Room } from '../store/hotelStore'
+import type { Room } from '../types/models'
 import SvgIcon from './SvgIcon.vue'
 
 const props = defineProps<{
@@ -13,29 +13,31 @@ const emit = defineEmits<{
 }>()
 
 const currentImageIndex = ref(0)
-
-const hasMultipleImages = computed(() => props.room.images && props.room.images.length > 1)
+const roomImages = computed(() => (props.room as any).images || [])
+const hasMultipleImages = computed(() => roomImages.value.length > 1)
 
 const currentImage = computed(() => {
-  if (hasMultipleImages.value && props.room.images) {
-    return props.room.images[currentImageIndex.value]
+  if (hasMultipleImages.value) {
+    return roomImages.value[currentImageIndex.value]
   }
-  return props.room.image
+  return (props.room as any).image || 'https://placehold.co/600x400?text=Habitacion'
 })
 
 const nextImage = () => {
-  if (!props.room.images) return
-  currentImageIndex.value = (currentImageIndex.value + 1) % props.room.images.length
+  if (!hasMultipleImages.value) return
+  currentImageIndex.value = (currentImageIndex.value + 1) % roomImages.value.length
 }
 
 const prevImage = () => {
-  if (!props.room.images) return
-  currentImageIndex.value = (currentImageIndex.value - 1 + props.room.images.length) % props.room.images.length
+  if (!hasMultipleImages.value) return
+  currentImageIndex.value = (currentImageIndex.value - 1 + roomImages.value.length) % roomImages.value.length
 }
+
+const isAvailable = computed(() => props.room.quantity > 0)
 </script>
 
 <template>
-  <div class="room-card" :class="{ 'unavailable': !room.isAvailable }" @click="emit('show-details', room.id)">
+  <div class="room-card" :class="{ 'unavailable': !isAvailable }" @click="emit('show-details', room.id)">
     <div class="room-image-wrapper">
       <img :src="currentImage" :alt="room.name" class="room-image" />
       
@@ -45,7 +47,7 @@ const prevImage = () => {
       </div>
       
       <div v-if="hasMultipleImages" class="carousel-indicators">
-        <span v-for="(img, idx) in room.images" :key="idx" 
+        <span v-for="(_, idx) in roomImages" :key="idx" 
               class="indicator" :class="{ active: idx === currentImageIndex }"></span>
       </div>
     </div>
@@ -59,23 +61,23 @@ const prevImage = () => {
         <span class="detail-item"><SvgIcon name="user" :size="16" /> Máx {{ room.capacity }} pers.</span>
       </div>
       
-      <div v-if="room.amenities && room.amenities.length > 0" class="room-amenities">
-        <span v-for="(amenity, idx) in room.amenities" :key="idx" class="amenity-chip">
-          ✓ {{ amenity }}
+      <div v-if="room.highlighted_amenities && room.highlighted_amenities.length > 0" class="room-amenities">
+        <span v-for="(amenity, idx) in room.highlighted_amenities" :key="idx" class="amenity-chip">
+          <SvgIcon :name="amenity.icon" :size="12" style="margin-right: 4px;" v-if="amenity.icon"/> {{ amenity.text }}
         </span>
       </div>
       
       <div class="room-footer">
         <div class="price">
-          <span class="amount">${{ room.pricePerNight }}</span>
+          <span class="amount">${{ room.price }}</span>
           <span class="period">/noche</span>
         </div>
         <button 
           class="btn btn-primary" 
-          :disabled="!room.isAvailable"
+          :disabled="!isAvailable"
           @click.stop="emit('book', room.id)"
         >
-          {{ room.isAvailable ? 'Reservar Ahora' : 'No Disponible' }}
+          {{ isAvailable ? 'Reservar Ahora' : 'Agotada' }}
         </button>
       </div>
     </div>

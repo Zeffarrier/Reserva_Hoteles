@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Hotel } from '../store/hotelStore'
+import type { Hotel } from '../types/models'
 import { useRouter } from 'vue-router'
 import SvgIcon from './SvgIcon.vue'
 
@@ -17,7 +17,7 @@ const viewDetails = () => {
 <template>
   <div class="hotel-card" @click="viewDetails">
     <div class="hotel-image-wrapper">
-      <img :src="hotel.image" :alt="hotel.name" class="hotel-image" />
+      <img :src="(hotel as any).image || 'https://placehold.co/600x400?text=Hotel'" :alt="hotel.name" class="hotel-image" />
       <div class="city-badge">{{ hotel.city }}</div>
     </div>
     

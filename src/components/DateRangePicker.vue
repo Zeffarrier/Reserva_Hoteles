@@ -78,7 +78,8 @@ const changeMonth = (delta: number) => {
   currentYear.value = newDate.getFullYear()
 }
 
-const onDateClick = (date: Date) => {
+const onDateClick = (date: Date | null) => {
+  if (!date) return;
   if (!isSelectingEnd.value) {
     // Start a new selection
     startDate.value = date
@@ -111,7 +112,8 @@ const onDateClick = (date: Date) => {
   }
 }
 
-const onDateHover = (date: Date) => {
+const onDateHover = (date: Date | null) => {
+  if (!date) return;
   if (isSelectingEnd.value && startDate.value) {
     hoverDate.value = date
   }
@@ -129,16 +131,23 @@ const visualEndDate = computed(() => {
   return endDate.value
 })
 
-const isSelectedStart = (date: Date) => startDate.value?.getTime() === date.getTime()
-const isSelectedEnd = (date: Date) => visualEndDate.value?.getTime() === date.getTime()
-const isPast = (date: Date) => {
+const isSelectedStart = (date: Date | null) => {
+  if (!date) return false;
+  return startDate.value?.getTime() === date.getTime();
+}
+const isSelectedEnd = (date: Date | null) => {
+  if (!date) return false;
+  return visualEndDate.value?.getTime() === date.getTime();
+}
+const isPast = (date: Date | null) => {
+  if (!date) return false;
   const today = new Date()
   today.setHours(0,0,0,0)
   return date < today
 }
 
-const isInRange = (date: Date) => {
-  if (!startDate.value) return false
+const isInRange = (date: Date | null) => {
+  if (!date || !startDate.value) return false
   
   const vEnd = visualEndDate.value
   if (vEnd) {

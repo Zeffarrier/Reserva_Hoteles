@@ -2,7 +2,7 @@
 import { ref, onMounted, watch, nextTick, onUnmounted } from 'vue'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
-import type { Hotel } from '../store/hotelStore'
+import type { Hotel } from '../types/models'
 
 const props = defineProps<{
   hotels: Hotel[]

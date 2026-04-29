@@ -7,7 +7,7 @@ import AdminView from '../views/AdminView.vue'
 import LoginView from '../views/LoginView.vue'
 import RegisterView from '../views/RegisterView.vue'
 import ProfileView from '../views/ProfileView.vue'
-import { useHotelStore } from '../store/hotelStore'
+import { useAuthStore } from '../store/authStore'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -58,8 +58,8 @@ const router = createRouter({
   ]
 })
 
-router.beforeEach((to, from, next) => {
-  const { state } = useHotelStore()
+router.beforeEach((to, _from, next) => {
+  const { state } = useAuthStore()
   const currentUser = state.currentUser
 
   // 1. Ya está logueado pero intenta ir a login/register
@@ -100,3 +100,4 @@ router.beforeEach((to, from, next) => {
 })
 
 export default router
+

@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { RouterLink, RouterView, useRouter } from 'vue-router'
-import { useHotelStore } from './store/hotelStore'
+import { useAuthStore } from './store/authStore'
 import SvgIcon from './components/SvgIcon.vue'
 import { computed } from 'vue'
 
-const { state, logout } = useHotelStore()
+const { state, logout } = useAuthStore()
 const router = useRouter()
 
 const currentUser = computed(() => state.currentUser)

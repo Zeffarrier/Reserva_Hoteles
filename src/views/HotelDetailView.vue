@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useHotelStore } from '../store/hotelStore'
+import { hotelService } from '../services/hotelService'
+import { roomService } from '../services/roomService'
+import { bookingService } from '../services/bookingService'
+import type { Hotel, Room } from '../types/models'
 import RoomCard from '../components/RoomCard.vue'
 import BookingForm from '../components/BookingForm.vue'
 import RoomDetailsModal from '../components/RoomDetailsModal.vue'
@@ -9,11 +12,11 @@ import SvgIcon from '../components/SvgIcon.vue'
 
 const route = useRoute()
 const router = useRouter()
-const { state, getRoomsForHotel, addReservation } = useHotelStore()
 
 const hotelId = route.params.id as string
-const hotel = computed(() => state.hotels.find(h => h.id === hotelId))
-const rooms = computed(() => getRoomsForHotel(hotelId))
+const hotel = ref<Hotel | null>(null)
+const rooms = ref<Room[]>([])
+const isLoading = ref(true)
 
 const selectedRoomId = ref<string | null>(null)
 const selectedDetailsRoomId = ref<string | null>(null)
@@ -58,21 +61,43 @@ const cancelBooking = () => {
   }, 250)
 }
 
-const submitBooking = (data: any) => {
-  if (selectedRoomId.value) {
-    addReservation({
-      roomId: selectedRoomId.value,
-      ...data,
-      status: 'Pending'
-    })
-    bookingSuccess.value = true
-    selectedRoomId.value = null
+const submitBooking = async (data: any) => {
+  if (selectedRoomId.value && hotel.value) {
+    try {
+      await bookingService.createBooking({
+        hotel_id: hotel.value.id,
+        room_id: selectedRoomId.value,
+        start_date: data.checkIn,
+        end_date: data.checkOut,
+        guest_count: 2, // Default or pass from form
+        guest_name: data.clientName,
+        guest_email: data.clientEmail,
+        guest_phone: data.clientPhone,
+        payment_method_id: 'pm_card_visa' // Mock payment id
+      })
+      bookingSuccess.value = true
+      selectedRoomId.value = null
+    } catch (e) {
+      console.error('Failed to create booking', e)
+      alert('Error al crear la reserva.')
+    }
   }
 }
 
-onMounted(() => {
-  if (!hotel.value) {
+onMounted(async () => {
+  try {
+    isLoading.value = true
+    const [h, r] = await Promise.all([
+      hotelService.getHotel(hotelId),
+      roomService.getRoomsByHotel(hotelId)
+    ])
+    hotel.value = h
+    rooms.value = r || []
+  } catch (e) {
+    console.error(e)
     router.push('/')
+  } finally {
+    isLoading.value = false
   }
 })
 </script>
@@ -86,7 +111,7 @@ onMounted(() => {
     </div>
 
     <header class="hotel-header">
-      <img :src="hotel.image" :alt="hotel.name" class="hotel-hero-image" />
+      <img :src="(hotel as any).image || 'https://placehold.co/600x400?text=Hotel'" :alt="hotel.name" class="hotel-hero-image" />
       <div class="hotel-header-content">
         <div class="badge city-badge">{{ hotel.city }}</div>
         <h1>{{ hotel.name }}</h1>
