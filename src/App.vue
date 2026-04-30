@@ -22,7 +22,7 @@ const handleLogout = () => {
   <div class="nav-links">
     <!-- Home for Client and Guest -->
     <RouterLink
-      v-if="!currentUser || currentUser.role === 'client'"
+      v-if="!currentUser || currentUser.role === 'user'"
       to="/"
       class="nav-link"
     >

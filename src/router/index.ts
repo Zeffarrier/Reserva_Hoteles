@@ -76,17 +76,27 @@ router.beforeEach((to, _from, next) => {
 
   // 3. Usuario autenticado: Restringir a sus paneles correspondientes
   if (currentUser) {
-    // El admin no debería poder ver la vista de cliente (home, mapa, hotel-detail)
-    if (currentUser.role === 'admin' && to.name !== 'admin' && to.name !== 'profile') {
+    const isAdmin = currentUser.role === 'admin'
+    const isReceptionist = currentUser.role === 'receptionist'
+
+    // El admin solo puede ver /admin y /profile
+    if (isAdmin && to.name !== 'admin' && to.name !== 'profile') {
       return next('/admin')
     }
     
-    // El recepcionista tampoco debería estar navegando como cliente
-    if (currentUser.role === 'receptionist' && to.name !== 'receptionist' && to.name !== 'profile') {
+    // El recepcionista solo puede ver /receptionist y /profile
+    if (isReceptionist && to.name !== 'receptionist' && to.name !== 'profile') {
       return next('/receptionist')
     }
 
-    // Validación extra para otras vistas si se requiere
+    // El usuario (cliente) no debería entrar a los paneles de gestión
+    if (currentUser.role === 'user') {
+      if (to.name === 'admin' || to.name === 'receptionist') {
+        return next('/')
+      }
+    }
+
+    // Validación extra para roles específicos en meta
     if (to.meta.roles) {
       const roles = to.meta.roles as string[]
       if (!roles.includes(currentUser.role)) {

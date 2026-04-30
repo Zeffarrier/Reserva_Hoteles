@@ -32,8 +32,13 @@ export const authService = {
     };
   },
 
-  async register(name: string, email: string, password: string): Promise<void> {
-    await apiClient.post<null>('/users/register', { display_name: name, email, password });
+  async register(name: string, email: string, password: string, role: Role = 'user'): Promise<void> {
+    await apiClient.post<null>('/users/register', { 
+      display_name: name, 
+      email, 
+      password,
+      user_type: role
+    });
   },
 
   async getProfile(): Promise<{ user: User }> {

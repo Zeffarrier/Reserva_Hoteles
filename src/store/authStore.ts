@@ -1,6 +1,6 @@
 import { reactive } from 'vue';
 
-export type Role = 'client' | 'receptionist' | 'admin';
+export type Role = 'user' | 'receptionist' | 'admin';
 
 export interface User {
   id: string;

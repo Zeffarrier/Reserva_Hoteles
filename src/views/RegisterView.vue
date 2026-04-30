@@ -2,18 +2,20 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { authService } from '../services/authService'
+import type { Role } from '../store/authStore'
 
 const router = useRouter()
 
 const name = ref('')
 const email = ref('')
 const password = ref('')
+const role = ref<Role>('user')
 const errorMsg = ref('')
 
 const handleRegister = async () => {
   errorMsg.value = ''
   try {
-    await authService.register(name.value, email.value, password.value)
+    await authService.register(name.value, email.value, password.value, role.value)
     router.push('/login')
   } catch (error: any) {
     errorMsg.value = error.message || 'Error al registrar la cuenta. Este correo podría ya estar registrado.'
@@ -69,6 +71,15 @@ const handleRegister = async () => {
             required
             minlength="3"
           />
+        </div>
+
+        <div class="input-group">
+          <label class="input-label" for="role">Tipo de Usuario</label>
+          <select id="role" v-model="role" class="input-field select-field">
+            <option value="user">Usuario / Cliente</option>
+            <option value="receptionist">Recepcionista</option>
+            <option value="admin">Administrador</option>
+          </select>
         </div>
 
         <div class="form-actions">
@@ -149,5 +160,14 @@ const handleRegister = async () => {
   background-color: var(--color-danger-light);
   color: #991b1b;
   border: 1px solid var(--color-danger);
+}
+
+.select-field {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='currentColor'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 1rem;
+  padding-right: 2.5rem;
 }
 </style>
